@@ -67,20 +67,26 @@
     - tenant.security.network_policy.template | default('') == 'allow-within-tenant'
   changed_when: false
 
-- name: "Tenant {{ tenant.tenant_name }} | Add custom NetworkPolicy rules"
-  ansible.builtin.set_fact:
-    ocp_networking_tenant_security_resources: >-
-      {{ ocp_networking_tenant_security_resources +
-         (tenant.security.network_policy.custom_rules | default([])
-          | map('combine', {'kind': 'NetworkPolicy',
-                            'apiVersion': 'networking.k8s.io/v1'})
-          | list) }}
+- name: "Tenant {{ tenant.tenant_name }} | Build custom NetworkPolicy for {{ ns.name }}"
+  ansible.builtin.include_tasks: build_custom_np.yml
+  loop: "{{ tenant.namespaces | default([]) }}"
+  loop_control:
+    loop_var: ns
+    label: "{{ ns.name }}"
+  vars:
+    _custom_np_rules: "{{ tenant.security.network_policy.custom_rules }}"
+    _custom_np_kind: NetworkPolicy
+    _custom_np_api: networking.k8s.io/v1
+    _custom_np_name: "{{ tenant.tenant_name }}-custom"
+    _custom_np_ns: "{{ ns.name }}"
+    _custom_np_annot: {}
+    _custom_np_pod_sel: "{{ tenant.security.network_policy.pod_selector | default({}) }}"
   when:
     - tenant.security.network_policy is defined
     - tenant.security.network_policy.enabled | default(false) | bool
+    - tenant.security.network_policy.template | default('') == 'custom'
     - tenant.security.network_policy.custom_rules is defined
     - tenant.security.network_policy.custom_rules | length > 0
-  changed_when: false
 
 # ── MultiNetworkPolicy ───────────────────────────────────────────────
 
@@ -111,21 +117,27 @@
     - tenant.security.multi_network_policy.template | default('') in ['default-deny-ingress', 'default-deny-all']
   changed_when: false
 
-- name: "Tenant {{ tenant.tenant_name }} | Add custom MultiNetworkPolicy rules"
-  ansible.builtin.set_fact:
-    ocp_networking_tenant_security_resources: >-
-      {{ ocp_networking_tenant_security_resources +
-         (tenant.security.multi_network_policy.custom_rules | default([])
-          | map('combine', {'kind': 'MultiNetworkPolicy',
-                            'apiVersion': 'k8s.cni.cncf.io/v1beta1'})
-          | list) }}
+- name: "Tenant {{ tenant.tenant_name }} | Build custom MultiNetworkPolicy for {{ ns.name }}"
+  ansible.builtin.include_tasks: build_custom_np.yml
+  loop: "{{ tenant.namespaces | default([]) }}"
+  loop_control:
+    loop_var: ns
+    label: "{{ ns.name }}"
+  vars:
+    _custom_np_rules: "{{ tenant.security.multi_network_policy.custom_rules }}"
+    _custom_np_kind: MultiNetworkPolicy
+    _custom_np_api: k8s.cni.cncf.io/v1beta1
+    _custom_np_name: "{{ tenant.tenant_name }}-mnp-custom"
+    _custom_np_ns: "{{ ns.name }}"
+    _custom_np_annot:
+      k8s.v1.cni.cncf.io/policy-for: "{{ ns.name }}/{{ (tenant.networks | default([]) | first | default({})).name | default('') }}"
+    _custom_np_pod_sel: "{{ tenant.security.multi_network_policy.pod_selector | default({}) }}"
   when:
     - tenant.security.multi_network_policy is defined
     - tenant.security.multi_network_policy.enabled | default(false) | bool
     - tenant.security.multi_network_policy.template | default('') == 'custom'
     - tenant.security.multi_network_policy.custom_rules is defined
     - tenant.security.multi_network_policy.custom_rules | length > 0
-  changed_when: false
 
 # ── EgressFirewall ───────────────────────────────────────────────────
 
@@ -138,13 +150,36 @@
            'name': 'default',
            'namespace': ns.name,
            'spec': {
-             'egress': tenant.security.egress_firewall.rules | default([])
+             'egress': _ef_rules
            }
          }] }}
   loop: "{{ tenant.namespaces | default([]) }}"
   loop_control:
     loop_var: ns
     label: "{{ ns.name }}"
+  vars:
+    _ef_rules: >-
+      {% set result = [] -%}
+      {% for rule in (tenant.security.egress_firewall.rules | default([])) -%}
+        {% set entry = {'type': rule.type | default('Allow')} -%}
+        {% if rule.to_type | default('cidr') == 'dns' -%}
+          {% set entry = entry | combine({'to': {'dnsName': rule.dns_name | default('')}}) -%}
+        {% else -%}
+          {% set entry = entry | combine({'to': {'cidrSelector': rule.cidr_selector | default('')}}) -%}
+        {% endif -%}
+        {% set ports = [] -%}
+        {% for p in (rule.ports | default([])) -%}
+          {% if p.port | default('') | string | length > 0 -%}
+            {% set port_val = (p.port | int) if (p.port | string | regex_search('^[0-9]+$')) else p.port -%}
+            {% set _ = ports.append({'protocol': p.protocol | default('TCP'), 'port': port_val}) -%}
+          {% endif -%}
+        {% endfor -%}
+        {% if ports | length > 0 -%}
+          {% set entry = entry | combine({'ports': ports}) -%}
+        {% endif -%}
+        {% set _ = result.append(entry) -%}
+      {% endfor -%}
+      {{ result }}
   when:
     - tenant.security.egress_firewall is defined
     - tenant.security.egress_firewall.enabled | default(false) | bool
