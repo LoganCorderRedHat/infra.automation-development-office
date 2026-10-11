@@ -471,29 +471,116 @@ def rhbk_oidc_issuer_url(preflight, vars_data=None):
 
 
 GRAFANA_BUILTIN_DASHBOARDS = (
-    {"id": "devspaces-overview", "folder_names": ["Applications"], "file": "devspaces-overview.json.j2"},
-    {"id": "devspaces-inventory", "folder_names": ["Applications"], "file": "devspaces-inventory.json.j2"},
-    {"id": "devspaces-workspace-detail", "folder_names": ["Applications"], "file": "devspaces-workspace-detail.json.j2"},
-    {"id": "keycloak-metrics", "folder_names": ["Applications"], "file": "keycloak-metrics.json.j2"},
-    {"id": "rhacs-vulnerability-posture", "folder_names": ["Security"], "file": ""},
-    {"id": "openshift-cluster-overview", "folder_names": ["Infrastucture", "Infrastructure"], "file": "Openshift-Cluster-Overview.json.j2"},
-    {"id": "openshift-cluster-health", "folder_names": ["Infrastucture", "Infrastructure"], "file": "openshift_cluster_health.json.j2"},
-    {"id": "openshift-cluster-metrics", "folder_names": ["Infrastucture", "Infrastructure"], "file": "openshift-cluster-metrics.json.j2"},
-    {"id": "openshift-cluster-resource-overview", "folder_names": ["Infrastucture", "Infrastructure"], "file": "openshift-cluster-resource-overview.json.j2"},
-    {"id": "openshift-cluster-details", "folder_names": ["Infrastucture", "Infrastructure"], "file": "openshift-cluster-details.json.j2"},
-    {"id": "openshift-projects", "folder_names": ["Infrastucture", "Infrastructure"], "file": "openshift-projects.json.j2"},
-    {"id": "openshift-api-monitoring", "folder_names": ["Infrastucture", "Infrastructure"], "file": "openshift-api-monitoring.json.j2"},
-    {"id": "openshift-k8s-dashboard", "folder_names": ["Infrastucture", "Infrastructure"], "file": "openshift-k8s-dashboard.json.j2"},
-    {"id": "kubernetes-compute-cluster", "folder_names": ["Infrastucture", "Infrastructure"], "file": "kubernetes-compute-resources-cluster.json.j2"},
-    {"id": "kubernetes-compute-namespace-pods", "folder_names": ["Infrastucture", "Infrastructure"], "file": "kubernetes-compute-resources-namespace-pods.json.j2"},
-    {"id": "kubernetes-compute-node-pods", "folder_names": ["Infrastucture", "Infrastructure"], "file": "kubernetes-compute-resources-node-pods.json.j2"},
-    {"id": "kubernetes-etcd", "folder_names": ["Infrastucture", "Infrastructure"], "file": "kubernetes-etcd-cluster.json.j2"},
-    {"id": "alert-analysis", "folder_names": ["Infrastucture", "Infrastructure"], "file": "alert-analysis.json.j2"},
-    {"id": "openshift-node-exporter", "folder_names": ["Infrastucture", "Infrastructure"], "file": "openshift-node-full-exporter.json.j2"},
-    {"id": "cert-manager-expiry", "folder_names": ["Infrastucture", "Infrastructure"], "file": "cert-manager-expiry.json.j2"},
-    {"id": "acm-clusters-overview", "folder_names": ["Infrastucture", "Infrastructure"], "file": "acm-clusters-overview.json.j2"},
-    {"id": "acm-resource-optimization", "folder_names": ["Infrastucture", "Infrastructure"], "file": "acm-resource-optimization-cluster.json.j2"},
-    {"id": "acm-right-sizing", "folder_names": ["Infrastucture", "Infrastructure"], "file": "acm-right-sizing-namespace.json.j2"},
+    {
+        "id": "devspaces-inventory",
+        "folder_names": ["Applications"],
+        "file": "devspaces-inventory.json.j2",
+    },
+    {
+        "id": "devspaces-overview",
+        "folder_names": ["Applications"],
+        "file": "devspaces-overview.json.j2",
+    },
+    {
+        "id": "devspaces-workspace-detail",
+        "folder_names": ["Applications"],
+        "file": "devspaces-workspace-detail.json.j2",
+    },
+    {
+        "id": "keycloak-metrics",
+        "folder_names": ["Applications"],
+        "file": "keycloak-metrics.json.j2",
+    },
+    {
+        "id": "rhacs-cve-report",
+        "folder_names": ["Security"],
+        "file": "rhacs-cve-report.json",
+    },
+    {
+        "id": "acm-clusters-overview",
+        "folder_names": ["Infrastucture", "Infrastructure"],
+        "file": "acm-clusters-overview.json.j2",
+    },
+    {
+        "id": "acm-resource-optimization-cluster",
+        "folder_names": ["Infrastucture", "Infrastructure"],
+        "file": "acm-resource-optimization-cluster.json.j2",
+    },
+    {
+        "id": "acm-right-sizing-namespace",
+        "folder_names": ["Infrastucture", "Infrastructure"],
+        "file": "acm-right-sizing-namespace.json.j2",
+    },
+    {
+        "id": "alert-analysis",
+        "folder_names": ["Infrastucture", "Infrastructure"],
+        "file": "alert-analysis.json.j2",
+    },
+    {
+        "id": "cert-manager-expiry",
+        "folder_names": ["Infrastucture", "Infrastructure"],
+        "file": "cert-manager-expiry.json.j2",
+    },
+    {
+        "id": "kubernetes-compute-resources-cluster",
+        "folder_names": ["Infrastucture", "Infrastructure"],
+        "file": "kubernetes-compute-resources-cluster.json.j2",
+    },
+    {
+        "id": "kubernetes-compute-resources-namespace-pods",
+        "folder_names": ["Infrastucture", "Infrastructure"],
+        "file": "kubernetes-compute-resources-namespace-pods.json.j2",
+    },
+    {
+        "id": "kubernetes-compute-resources-node-pods",
+        "folder_names": ["Infrastucture", "Infrastructure"],
+        "file": "kubernetes-compute-resources-node-pods.json.j2",
+    },
+    {
+        "id": "kubernetes-etcd-cluster",
+        "folder_names": ["Infrastucture", "Infrastructure"],
+        "file": "kubernetes-etcd-cluster.json.j2",
+    },
+    {
+        "id": "openshift-api-monitoring",
+        "folder_names": ["Infrastucture", "Infrastructure"],
+        "file": "openshift-api-monitoring.json.j2",
+    },
+    {
+        "id": "openshift-cluster-details",
+        "folder_names": ["Infrastucture", "Infrastructure"],
+        "file": "openshift-cluster-details.json.j2",
+    },
+    {
+        "id": "openshift-cluster-health",
+        "folder_names": ["Infrastucture", "Infrastructure"],
+        "file": "openshift_cluster_health.json.j2",
+    },
+    {
+        "id": "openshift-cluster-metrics",
+        "folder_names": ["Infrastucture", "Infrastructure"],
+        "file": "openshift-cluster-metrics.json.j2",
+    },
+    {
+        "id": "openshift-cluster-resource-overview",
+        "folder_names": ["Infrastucture", "Infrastructure"],
+        "file": "openshift-cluster-resource-overview.json.j2",
+    },
+    {
+        "id": "openshift-k8s-dashboard",
+        "folder_names": ["Infrastucture", "Infrastructure"],
+        "file": "openshift-k8s-dashboard.json.j2",
+    },
+    {
+        "id": "openshift-node-full-exporter",
+        "folder_names": ["Infrastucture", "Infrastructure"],
+        "file": "openshift-node-full-exporter.json.j2",
+    },
+    {
+        "id": "openshift-projects",
+        "folder_names": ["Infrastucture", "Infrastructure"],
+        "file": "openshift-projects.json.j2",
+    },
 )
 
 
