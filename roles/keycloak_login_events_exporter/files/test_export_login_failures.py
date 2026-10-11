@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Classify LOGIN vs LOGIN_ERROR the same way the exporter does."""
 from __future__ import annotations
 

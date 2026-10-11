@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Create a MinIO/S3 bucket with stdlib only (no mc, no boto3)."""
 from __future__ import annotations
 

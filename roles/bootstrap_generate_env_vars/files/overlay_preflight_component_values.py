@@ -230,6 +230,7 @@ _cm = (preflight.get("component_config") or {}).get("cert_manager") or {}
 if str(_cm.get("update_default_ingress", "")).lower() in ("1", "true", "yes", "on"):
     selected_components.add("cert_manager")
 
+
 def is_secret_key(key):
     k = str(key or "").lower()
     if k in {"hub_s3_secret", "hub_azure_secret"}:

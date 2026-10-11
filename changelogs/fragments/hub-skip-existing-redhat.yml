@@ -5,4 +5,3 @@ bugfixes:
     the version already exists in ``validated``, ``published``,
     ``rh-certified``, or pulp, and does not fail when the reserved
     ``redhat`` namespace or certified collections are already present.
----

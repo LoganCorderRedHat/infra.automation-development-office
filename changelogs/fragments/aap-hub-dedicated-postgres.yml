@@ -6,4 +6,3 @@ minor_changes:
     ``aap-hub-stability`` CronJob. Discovers AAP/Hub CR names when unset.
     Preflight AAP tools option ``dedicated_hub_postgres`` generates the
     playbook and Controller job template without selecting OpenShift.
----

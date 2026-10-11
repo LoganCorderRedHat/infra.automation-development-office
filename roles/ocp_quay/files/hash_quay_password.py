@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Print a bcrypt hash for QUAY_ADMIN_PASSWORD (stdlib extras: bcrypt or passlib)."""
 from __future__ import annotations
 

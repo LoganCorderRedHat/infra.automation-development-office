@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Expose Keycloak user LOGIN / LOGIN_ERROR events as Prometheus metrics.
 
 Native keycloak_user_events_total does NOT include username. This exporter polls
@@ -45,7 +44,11 @@ LISTEN_PORT = int(env("LISTEN_PORT", "8080") or "8080")
 VERIFY = env("KEYCLOAK_VERIFY_TLS", "false").lower() in ("1", "true", "yes")
 
 _lock = threading.Lock()
-_metrics = "# HELP keycloak_login_events_exporter_up Exporter scrape loop healthy\n# TYPE keycloak_login_events_exporter_up gauge\nkeycloak_login_events_exporter_up 0\n"
+_metrics = (
+    "# HELP keycloak_login_events_exporter_up Exporter scrape loop healthy\n"
+    "# TYPE keycloak_login_events_exporter_up gauge\n"
+    "keycloak_login_events_exporter_up 0\n"
+)
 _token = ""
 _token_exp = 0.0
 

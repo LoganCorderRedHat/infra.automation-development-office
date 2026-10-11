@@ -6,4 +6,3 @@ bugfixes:
     That server inventory is only created for Satellite install or OIDC, so
     RHEL / patching / Satellite client runs no longer fail looking for a
     missing Satellite inventory.
----
