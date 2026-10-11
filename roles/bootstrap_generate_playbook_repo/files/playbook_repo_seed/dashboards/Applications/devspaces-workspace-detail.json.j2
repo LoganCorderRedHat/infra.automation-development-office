@@ -1,0 +1,899 @@
+{% raw %}
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "title": "Back to inventory",
+      "type": "link",
+      "url": "/d/ado-devspaces-inventory/dev-spaces-inventory",
+      "icon": "arrow-left",
+      "keepTime": true
+    }
+  ],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "panels": [],
+      "title": "Workspace $dw_namespace / $dw_name ($dw_id)",
+      "type": "row"
+    },
+    {
+      "datasource": "{{ grafana_datasource }}",
+      "description": "DevWorkspace phase from status exporter.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^dw_phase$/",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "devworkspace{dw_namespace=\"$dw_namespace\",dw_name=\"$dw_name\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Phase",
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {}
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": "{{ grafana_datasource }}",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cores",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$dw_namespace\",pod=~\"$dw_id.*\",container!=\"\",container!=\"POD\"}[5m])) or vector(0)",
+          "instant": true,
+          "refId": "A",
+          "format": "time_series"
+        }
+      ],
+      "title": "CPU (now)",
+      "type": "stat"
+    },
+    {
+      "datasource": "{{ grafana_datasource }}",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(container_memory_working_set_bytes{namespace=\"$dw_namespace\",pod=~\"$dw_id.*\",container!=\"\",container!=\"POD\"}) or vector(0)",
+          "instant": true,
+          "refId": "A",
+          "format": "time_series"
+        }
+      ],
+      "title": "Memory (now)",
+      "type": "stat"
+    },
+    {
+      "datasource": "{{ grafana_datasource }}",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "yellow",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(container_network_receive_bytes_total{namespace=\"$dw_namespace\",pod=~\"$dw_id.*\"}[5m]) + rate(container_network_transmit_bytes_total{namespace=\"$dw_namespace\",pod=~\"$dw_id.*\"}[5m])) or vector(0)",
+          "instant": true,
+          "refId": "A",
+          "format": "time_series"
+        }
+      ],
+      "title": "Network RX+TX (now)",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "id": 10,
+      "panels": [],
+      "title": "CPU / Memory / Network",
+      "type": "row"
+    },
+    {
+      "datasource": "{{ grafana_datasource }}",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cores",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 5
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"$dw_namespace\",pod=~\"$dw_id.*\",container!=\"\",container!=\"POD\"}[5m]))",
+          "legendFormat": "{{container}}",
+          "refId": "A"
+        }
+      ],
+      "title": "CPU by container",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "{{ grafana_datasource }}",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 5
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (container) (container_memory_working_set_bytes{namespace=\"$dw_namespace\",pod=~\"$dw_id.*\",container!=\"\",container!=\"POD\"})",
+          "legendFormat": "{{container}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Memory by container",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "{{ grafana_datasource }}",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 5
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(container_network_receive_bytes_total{namespace=\"$dw_namespace\",pod=~\"$dw_id.*\"}[5m]))",
+          "legendFormat": "RX",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(container_network_transmit_bytes_total{namespace=\"$dw_namespace\",pod=~\"$dw_id.*\"}[5m]))",
+          "legendFormat": "TX",
+          "refId": "B"
+        }
+      ],
+      "title": "Network",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "id": 20,
+      "panels": [],
+      "title": "Installed VS Code plugins (Running workspaces only)",
+      "type": "row"
+    },
+    {
+      "datasource": "{{ grafana_datasource }}",
+      "description": "From /checode/remote/extensions via DevWorkspace status exporter. Empty if Stopped or exporter not scraping extensions yet.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "inspect": false
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "id": 21,
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "devworkspace_vscode_extension{dw_namespace=\"$dw_namespace\",dw_name=\"$dw_name\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "VS Code / CheCode extensions",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "container": true,
+              "endpoint": true,
+              "instance": true,
+              "job": true,
+              "namespace": true,
+              "pod": true,
+              "prometheus": true,
+              "service": true,
+              "managed_cluster": true,
+              "dw_namespace": true,
+              "dw_name": true,
+              "dw_id": true
+            },
+            "indexByName": {
+              "ext_publisher": 0,
+              "ext_id": 1,
+              "ext_version": 2
+            },
+            "renameByName": {
+              "ext_publisher": "Publisher",
+              "ext_id": "Extension",
+              "ext_version": "Version"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "id": 30,
+      "panels": [],
+      "title": "Images / vulnerabilities",
+      "type": "row"
+    },
+    {
+      "datasource": "{{ grafana_datasource }}",
+      "description": "Container images for this workspace pod. CVE severity stats (right) come from CVE Analyzer triage filtered by $dw_namespace.",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 25
+      },
+      "id": 31,
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "kube_pod_container_info{namespace=\"$dw_namespace\",pod=~\"$dw_id.*\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Workspace container images",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "container": true,
+              "endpoint": true,
+              "instance": true,
+              "job": true,
+              "prometheus": true,
+              "service": true,
+              "managed_cluster": true,
+              "uid": true,
+              "image_id": true,
+              "image_spec": true
+            },
+            "renameByName": {
+              "namespace": "Namespace",
+              "pod": "Pod",
+              "image": "Image"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "type": "stat",
+      "title": "Critical",
+      "description": "Filtered from CVE Analyzer triage data.json for this DevWorkspace namespace.",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 25
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(cve_triage_severity_total{namespace=\"$dw_namespace\",severity=\"Critical\"}) or vector(0)",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "id": 41
+    },
+    {
+      "type": "stat",
+      "title": "High",
+      "description": "Filtered from CVE Analyzer triage data.json for this DevWorkspace namespace.",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 25
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(cve_triage_severity_total{namespace=\"$dw_namespace\",severity=~\"Important|High\"}) or vector(0)",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "id": 42
+    },
+    {
+      "type": "stat",
+      "title": "Moderate",
+      "description": "Filtered from CVE Analyzer triage data.json for this DevWorkspace namespace.",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 29
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(cve_triage_severity_total{namespace=\"$dw_namespace\",severity=\"Moderate\"}) or vector(0)",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "id": 43
+    },
+    {
+      "type": "stat",
+      "title": "Unique CVEs",
+      "description": "Filtered from CVE Analyzer triage data.json for this DevWorkspace namespace.",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 29
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "max(cve_triage_unique_cves{namespace=\"$dw_namespace\"}) or vector(0)",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "id": 44
+    },
+    {
+      "type": "text",
+      "title": "ACS / triage",
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      },
+      "id": 45,
+      "options": {
+        "mode": "markdown",
+        "content": "Counts above are **filtered from the CVE Analyzer triage export** for namespace `$dw_namespace` (not live `rox_*` Prom metrics).\\n\\n[Open full triage dashboard](/d/ado-rhacs-cve-triage) \u00b7 [RHACS vulnerability overview](/d/ado-rhacs-vuln-posture) \u00b7 ACS Central (filter deployments by `$dw_namespace`).\\n\\nRefresh counts: Contoller **CVE Analyzer | Full Workflow**. Empty zeros until that job publishes `cve_triage_*` metrics."
+      },
+      "datasource": {
+        "type": "grafana",
+        "uid": "-- Grafana --"
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "devspaces",
+    "detail"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "default",
+          "value": "default"
+        },
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "refresh": 1,
+        "options": [],
+        "regex": "",
+        "skipUrlSync": false
+      },
+      {
+        "name": "dw_namespace",
+        "type": "textbox",
+        "label": "Namespace",
+        "hide": 0,
+        "query": "chad-devspaces",
+        "current": {
+          "selected": true,
+          "text": "chad-devspaces",
+          "value": "chad-devspaces"
+        },
+        "options": [],
+        "skipUrlSync": false
+      },
+      {
+        "name": "dw_name",
+        "type": "textbox",
+        "label": "DevWorkspace",
+        "hide": 0,
+        "query": "",
+        "current": {
+          "selected": true,
+          "text": "",
+          "value": ""
+        },
+        "options": [],
+        "skipUrlSync": false
+      },
+      {
+        "name": "dw_id",
+        "type": "textbox",
+        "label": "Workspace ID",
+        "hide": 0,
+        "query": "",
+        "current": {
+          "selected": true,
+          "text": "",
+          "value": ""
+        },
+        "options": [],
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Dev Spaces \u2014 Workspace detail",
+  "uid": "ado-devspaces-detail",
+  "version": 1
+}
+{% endraw %}

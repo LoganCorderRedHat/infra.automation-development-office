@@ -1,7 +1,8 @@
 # Role: infra.ado.grafana_upload_alerts
 
 Uploads Grafana alert rule JSON (``.json`` / ``.json.j2``) from
-``grafana_folders`` entries (git or path + ``alerts_path``).
+``grafana_alert_folders`` (git or path + ``alerts_path``). When that
+list is empty, the role falls back to ``grafana_folders``.
 
 ## Role Author
 
@@ -18,7 +19,8 @@ Automation Development Office.
 | Variable | Description |
 | --- | --- |
 | `grafana_hostname` | Grafana host (no scheme). |
-| `grafana_folders` | Folder sources; uses ``alerts_path`` (default ``alerts``). |
+| `grafana_alert_folders` | Alert folder sources. Default folder is ``Alerts`` at ``alerts/Alerts``. |
+| `grafana_folders` | Used only when ``grafana_alert_folders`` is empty. |
 | `grafana_alerts_enabled` | When false, role ends without uploading. |
 | `grafana_api_key` | Optional Bearer token. |
 | `grafana_admin_user` / `grafana_admin_password` | Basic auth when API key unset. |
@@ -33,11 +35,11 @@ Automation Development Office.
         grafana_hostname: grafana.apps.example.com
         grafana_admin_password: "{{ vault_grafana_admin_password }}"
         grafana_alerts_enabled: true
-        grafana_folders:
-          - name: Openshift
-            source_type: git
-            source: https://gitlab.example.com/project/alerts.git
-            alerts_path: alerts
+        grafana_alert_folders:
+          - name: Alerts
+            source_type: path
+            source: "."
+            alerts_path: alerts/Alerts
 ```
 
 ## 🧪 Role Molecule Testing

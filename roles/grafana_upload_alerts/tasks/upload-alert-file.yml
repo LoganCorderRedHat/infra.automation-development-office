@@ -10,6 +10,12 @@
     src: "{{ grafana_alert_item.path }}"
     dest: "/tmp/grafana-alerts/{{ grafana_alert_item.name }}.json"
     mode: "0644"
+  vars:
+    grafana_upload_alerts_folder_uid: >-
+      {{
+        (grafana_alert_item.folder | default('Alerts'))
+        ~ '-folder'
+      }}
   when: (grafana_alert_item.path | basename | regex_search('\\.json\\.j2$')) is not none
 
 - name: Copy plain alert JSON

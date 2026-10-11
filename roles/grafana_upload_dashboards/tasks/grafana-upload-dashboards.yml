@@ -31,6 +31,26 @@
         )
       }}
 
+- name: Initialize kept dashboard folder rows
+  ansible.builtin.set_fact:
+    grafana_upload_dashboards_folders_kept: []
+
+- name: Drop built-in dashboard rows when include is off
+  ansible.builtin.set_fact:
+    grafana_upload_dashboards_folders_kept: >-
+      {{ grafana_upload_dashboards_folders_kept + [item] }}
+  loop: "{{ grafana_upload_dashboards_folders }}"
+  loop_control:
+    label: "{{ item.name | default('folder') }}"
+  when: >-
+    not (item.builtin | default(false) | bool)
+    or (grafana_include_builtin_dashboards | default(true) | bool)
+
+- name: Apply built-in dashboard filter
+  ansible.builtin.set_fact:
+    grafana_upload_dashboards_folders: >-
+      {{ grafana_upload_dashboards_folders_kept }}
+
 - name: Build work items from grafana_folders
   ansible.builtin.include_tasks: collect-folder-dashboards.yml
   loop: "{{ grafana_upload_dashboards_folders }}"

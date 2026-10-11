@@ -470,6 +470,33 @@ def rhbk_oidc_issuer_url(preflight, vars_data=None):
     return f"https://{host_clean}/realms/{realm}", str(realm)
 
 
+GRAFANA_BUILTIN_DASHBOARDS = (
+    {"id": "devspaces-overview", "folder_names": ["Applications"], "file": "devspaces-overview.json.j2"},
+    {"id": "devspaces-inventory", "folder_names": ["Applications"], "file": "devspaces-inventory.json.j2"},
+    {"id": "devspaces-workspace-detail", "folder_names": ["Applications"], "file": "devspaces-workspace-detail.json.j2"},
+    {"id": "keycloak-metrics", "folder_names": ["Applications"], "file": "keycloak-metrics.json.j2"},
+    {"id": "rhacs-vulnerability-posture", "folder_names": ["Security"], "file": ""},
+    {"id": "openshift-cluster-overview", "folder_names": ["Infrastucture", "Infrastructure"], "file": "Openshift-Cluster-Overview.json.j2"},
+    {"id": "openshift-cluster-health", "folder_names": ["Infrastucture", "Infrastructure"], "file": "openshift_cluster_health.json.j2"},
+    {"id": "openshift-cluster-metrics", "folder_names": ["Infrastucture", "Infrastructure"], "file": "openshift-cluster-metrics.json.j2"},
+    {"id": "openshift-cluster-resource-overview", "folder_names": ["Infrastucture", "Infrastructure"], "file": "openshift-cluster-resource-overview.json.j2"},
+    {"id": "openshift-cluster-details", "folder_names": ["Infrastucture", "Infrastructure"], "file": "openshift-cluster-details.json.j2"},
+    {"id": "openshift-projects", "folder_names": ["Infrastucture", "Infrastructure"], "file": "openshift-projects.json.j2"},
+    {"id": "openshift-api-monitoring", "folder_names": ["Infrastucture", "Infrastructure"], "file": "openshift-api-monitoring.json.j2"},
+    {"id": "openshift-k8s-dashboard", "folder_names": ["Infrastucture", "Infrastructure"], "file": "openshift-k8s-dashboard.json.j2"},
+    {"id": "kubernetes-compute-cluster", "folder_names": ["Infrastucture", "Infrastructure"], "file": "kubernetes-compute-resources-cluster.json.j2"},
+    {"id": "kubernetes-compute-namespace-pods", "folder_names": ["Infrastucture", "Infrastructure"], "file": "kubernetes-compute-resources-namespace-pods.json.j2"},
+    {"id": "kubernetes-compute-node-pods", "folder_names": ["Infrastucture", "Infrastructure"], "file": "kubernetes-compute-resources-node-pods.json.j2"},
+    {"id": "kubernetes-etcd", "folder_names": ["Infrastucture", "Infrastructure"], "file": "kubernetes-etcd-cluster.json.j2"},
+    {"id": "alert-analysis", "folder_names": ["Infrastucture", "Infrastructure"], "file": "alert-analysis.json.j2"},
+    {"id": "openshift-node-exporter", "folder_names": ["Infrastucture", "Infrastructure"], "file": "openshift-node-full-exporter.json.j2"},
+    {"id": "cert-manager-expiry", "folder_names": ["Infrastucture", "Infrastructure"], "file": "cert-manager-expiry.json.j2"},
+    {"id": "acm-clusters-overview", "folder_names": ["Infrastucture", "Infrastructure"], "file": "acm-clusters-overview.json.j2"},
+    {"id": "acm-resource-optimization", "folder_names": ["Infrastucture", "Infrastructure"], "file": "acm-resource-optimization-cluster.json.j2"},
+    {"id": "acm-right-sizing", "folder_names": ["Infrastucture", "Infrastructure"], "file": "acm-right-sizing-namespace.json.j2"},
+)
+
+
 def env_label_suffix(env):
     e = str(env or "").strip().lower()
     if e == "dev":
@@ -1068,8 +1095,100 @@ def merge_component(component, cfg):
                 vars_data["components_env"]["grafana"]["hostname"] = public_values["hostname"]
             folders = public_values.get("folders")
             if isinstance(folders, list):
-                vars_data["grafana_folders"] = copy.deepcopy(folders)
-                vars_data["components_env"]["grafana"]["grafana_folders"] = copy.deepcopy(folders)
+                cleaned_folders = []
+                for folder_item in folders:
+                    if not isinstance(folder_item, dict):
+                        cleaned_folders.append(folder_item)
+                        continue
+                    folder_copy = copy.deepcopy(folder_item)
+                    folder_copy.pop("dashboards_path_manual", None)
+                    cleaned_folders.append(folder_copy)
+                named_folders = [
+                    str(item.get("name") or "").strip()
+                    for item in cleaned_folders
+                    if isinstance(item, dict) and str(item.get("name") or "").strip()
+                ]
+
+                def pick_grafana_folder(wanted_names):
+                    by_lower = {name.lower(): name for name in named_folders}
+                    for wanted in wanted_names:
+                        match = by_lower.get(str(wanted).lower())
+                        if match:
+                            return match
+                    return named_folders[0] if named_folders else ""
+
+                include_builtin = as_bool(
+                    public_values.get("include_builtin_dashboards", True),
+                    True,
+                )
+                selected_builtin = public_values.get("builtin_dashboards")
+                if isinstance(selected_builtin, list):
+                    selected_ids = {str(item) for item in selected_builtin}
+                    chosen_builtin = [
+                        item for item in GRAFANA_BUILTIN_DASHBOARDS
+                        if item["id"] in selected_ids
+                    ]
+                elif include_builtin:
+                    chosen_builtin = list(GRAFANA_BUILTIN_DASHBOARDS)
+                else:
+                    chosen_builtin = []
+                # Lab boards ship under dashboards/<folder>. A partial checkbox
+                # list limits that directory. The full set uploads every file there.
+                # RHACS has no portable file; the CVE Analyzer job publishes it.
+                selection_is_explicit = isinstance(selected_builtin, list)
+                if selection_is_explicit or not include_builtin:
+                    for folder in cleaned_folders:
+                        if not isinstance(folder, dict):
+                            continue
+                        folder_name = str(folder.get("name") or "").strip()
+                        folder_path = str(folder.get("dashboards_path") or "").strip()
+                        if folder_path != f"dashboards/{folder_name}":
+                            continue
+                        catalog_files = [
+                            item["file"]
+                            for item in GRAFANA_BUILTIN_DASHBOARDS
+                            if item.get("file")
+                            and folder_name.lower() in [n.lower() for n in item["folder_names"]]
+                        ]
+                        if not catalog_files:
+                            continue
+                        folder["include_files"] = [
+                            item["file"]
+                            for item in chosen_builtin
+                            if item.get("file")
+                            and folder_name.lower() in [n.lower() for n in item["folder_names"]]
+                        ]
+                include_builtin = bool(chosen_builtin)
+                extra_dashboards = public_values.get("extra_dashboards") or []
+                if isinstance(extra_dashboards, list):
+                    for extra in extra_dashboards:
+                        if not isinstance(extra, dict):
+                            continue
+                        source = str(extra.get("source") or "").strip()
+                        dashboards_path = str(extra.get("dashboards_path") or "").strip()
+                        source_type = str(extra.get("source_type") or "path").strip() or "path"
+                        if source_type == "git":
+                            if not source:
+                                continue
+                        elif not dashboards_path:
+                            continue
+                        requested = str(extra.get("folder") or "").strip()
+                        target = requested if requested in named_folders else pick_grafana_folder([])
+                        cleaned_folders.append(
+                            {
+                                "name": target,
+                                "source_type": source_type,
+                                "source": source or ".",
+                                "dashboards_path": dashboards_path,
+                                "datasource_mode": "none",
+                            }
+                        )
+                vars_data["grafana_include_builtin_dashboards"] = bool(include_builtin)
+                vars_data["components_env"]["grafana"]["grafana_include_builtin_dashboards"] = bool(
+                    include_builtin
+                )
+                vars_data["grafana_folders"] = cleaned_folders
+                vars_data["components_env"]["grafana"]["grafana_folders"] = copy.deepcopy(cleaned_folders)
             datasources = public_values.get("datasources")
             if isinstance(datasources, list):
                 normalized_ds = []
@@ -1122,9 +1241,30 @@ def merge_component(component, cfg):
                     normalized_email
                 )
             oidc = public_values.get("oidc")
+            grafana_issuer_manual = False
             if isinstance(oidc, dict):
-                vars_data["oidc"] = copy.deepcopy(oidc)
+                oidc = copy.deepcopy(oidc)
+                grafana_issuer_manual = bool(oidc.pop("issuer_manual", False))
+                oidc.pop("issuer_derived", None)
+                vars_data["oidc"] = oidc
                 vars_data["components_env"]["grafana"]["oidc"] = copy.deepcopy(oidc)
+            alert_folders = public_values.get("alert_folders")
+            if isinstance(alert_folders, list):
+                cleaned_alert_folders = []
+                for alert_item in alert_folders:
+                    if not isinstance(alert_item, dict):
+                        continue
+                    alert_copy = copy.deepcopy(alert_item)
+                    alert_copy.pop("alerts_path_manual", None)
+                    alert_name = str(alert_copy.get("name") or "").strip()
+                    alert_path = str(alert_copy.get("alerts_path") or "").strip()
+                    if not alert_name and not alert_path:
+                        continue
+                    cleaned_alert_folders.append(alert_copy)
+                vars_data["grafana_alert_folders"] = cleaned_alert_folders
+                vars_data["components_env"]["grafana"]["grafana_alert_folders"] = (
+                    copy.deepcopy(cleaned_alert_folders)
+                )
             grafana_opts = (
                 (preflight.get("component_options") or {}).get("grafana") or []
             )
@@ -1156,8 +1296,25 @@ def merge_component(component, cfg):
                         ],
                     }
                     issuer, _realm = rhbk_oidc_issuer_url(preflight, vars_data)
-                    if issuer and not oidc_cfg.get("issuer"):
+                    if issuer and not grafana_issuer_manual and not oidc_cfg.get("issuer"):
                         oidc_cfg["issuer"] = issuer
+                    vars_data["oidc"] = copy.deepcopy(oidc_cfg)
+                    vars_data["components_env"]["grafana"]["oidc"] = copy.deepcopy(
+                        oidc_cfg
+                    )
+                    vars_data_changed = True
+            if (
+                rhbk_selected_in_preflight(preflight)
+                and not grafana_standalone
+                and "oidc" in grafana_opts_lower
+                and not grafana_issuer_manual
+            ):
+                oidc_cfg = vars_data.get("oidc")
+                if not isinstance(oidc_cfg, dict):
+                    oidc_cfg = {}
+                issuer, _realm = rhbk_oidc_issuer_url(preflight, vars_data)
+                if issuer and oidc_cfg.get("issuer") != issuer:
+                    oidc_cfg["issuer"] = issuer
                     vars_data["oidc"] = copy.deepcopy(oidc_cfg)
                     vars_data["components_env"]["grafana"]["oidc"] = copy.deepcopy(
                         oidc_cfg

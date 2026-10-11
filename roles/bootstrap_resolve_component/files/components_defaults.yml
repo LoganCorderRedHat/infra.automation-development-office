@@ -609,48 +609,42 @@ components_defaults:
       #     name: grafana-acm-observatorium
       #     namespace: grafana
       #     key: token
-    grafana_folder: "Openshift"
+    grafana_folder: "Applications"
     dashboard_dir: "../templates"
     grafana_dashboards_type: templates
     grafana_dashboards_source: ""
-    # When true (default), also deploy shared "Openshift" folder whose dashboards
-    # use a K8S datasource dropdown (OpenshiftProd / OpenshiftProdInfra).
-    # OpenshiftProd + OpenshiftProdInfra folders are always deployed (pinned).
+    # When true, keep a folder named Openshift (K8S Prod/Dev dropdown) if that
+    # row is present. Default rows are the lab folders below.
     grafana_group_cluster_dashboards: true
-    # Seeded under playbook_repo_seed/templates/ (copied out with the playbook repo).
-    # Same templates/Openshift/dashboards files are uploaded three ways via
-    # datasource_mode (pin Prod, pin ProdInfra, multi dropdown).
+    # Source "." is the bootstrap project. dashboards_path defaults to
+    # dashboards/<folder name> and stays editable in preflight.
+    # Folder spelling Infrastucture matches the lab dashboard tree.
     grafana_folders:
-      - name: OpenshiftProd
+      - name: Applications
         source_type: path
-        source: templates/Openshift
-        dashboards_path: dashboards
-        alerts_path: alerts
-        datasource_mode: pin
-        datasource: OpenshiftProd
-        uid_suffix: prod
-        title_cluster: Prod
-      - name: OpenshiftProdInfra
-        source_type: path
-        source: templates/Openshift
-        dashboards_path: dashboards
-        alerts_path: alerts
-        datasource_mode: pin
-        datasource: OpenshiftProdInfra
-        uid_suffix: infra
-        title_cluster: Infra
-      - name: Openshift
-        source_type: path
-        source: templates/Openshift
-        dashboards_path: dashboards
-        alerts_path: alerts
+        source: "."
+        dashboards_path: dashboards/Applications
         datasource_mode: multi
-      - name: RHACS
+      - name: Security
         source_type: path
-        source: templates/RHACS
-        dashboards_path: dashboards
+        source: "."
+        dashboards_path: dashboards/Security
         datasource_mode: none
+      - name: Infrastucture
+        source_type: path
+        source: "."
+        dashboards_path: dashboards/Infrastucture
+        datasource_mode: multi
+    # Lab dashboards are copied to dashboards/<folder name> in the
+    # generated repo. Preflight checkboxes limit which of those files upload.
+    grafana_include_builtin_dashboards: true
     grafana_alerts_enabled: false
+    # Separate from dashboard folders. Path defaults to alerts/<folder name>.
+    grafana_alert_folders:
+      - name: Alerts
+        source_type: path
+        source: "."
+        alerts_path: alerts/Alerts
     # Optional git/path sources of datasource JSON (independent of prometheus list).
     grafana_datasource_sources: []
     grafana_email:

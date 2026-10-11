@@ -2,7 +2,9 @@
 
 Copied into generated playbook repos by `infra.ado.bootstrap_generate_playbook_repo`.
 
-Layout matches Grafana multi-folder upload (`grafana_folders`):
+These trees stay in the generated repo. Default Grafana folders are
+Applications, Security, and Infrastucture (`dashboards/<folder name>`).
+Point a folder source here when you want the OpenShift or RHACS templates:
 
 | Grafana folder | Path | Mode |
 |----------------|------|------|
@@ -67,32 +69,20 @@ Run **ADO | Deploy Grafana** (full) or **ADO | Deploy Grafana Dashboards**
 Example `grafana_folders` (defaults in `components_defaults.yml`):
 
 ```yaml
-grafana_group_cluster_dashboards: true
 grafana_folders:
-  - name: OpenshiftProd
+  - name: Applications
     source_type: path
-    source: templates/Openshift
-    dashboards_path: dashboards
-    datasource_mode: pin
-    datasource: Openshift-Prod
-    uid_suffix: "-prod"
-    title_cluster: Prod
-  - name: OpenshiftDev
-    source_type: path
-    source: templates/Openshift
-    dashboards_path: dashboards
-    datasource_mode: pin
-    datasource: Openshift-Dev
-    uid_suffix: "-dev"
-    title_cluster: Dev
-  - name: Openshift
-    source_type: path
-    source: templates/Openshift
-    dashboards_path: dashboards
+    source: "."
+    dashboards_path: dashboards/Applications
     datasource_mode: multi
-  - name: RHACS
+  - name: Security
     source_type: path
-    source: templates/RHACS
-    dashboards_path: dashboards
+    source: "."
+    dashboards_path: dashboards/Security
     datasource_mode: none
+  - name: Infrastucture
+    source_type: path
+    source: "."
+    dashboards_path: dashboards/Infrastucture
+    datasource_mode: multi
 ```

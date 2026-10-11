@@ -25,12 +25,113 @@
       grafana_upload_alerts needs grafana_hostname and either grafana_api_key
       or grafana_admin_password.
 
-- name: Collect alerts from grafana_folders
+- name: Collect alerts from alert folders
   ansible.builtin.include_tasks: collect-folder-alerts.yml
-  loop: "{{ grafana_folders | default([]) }}"
+  loop: >-
+    {{
+      grafana_alert_folders
+      if (grafana_alert_folders | default([]) | length) > 0
+      else (grafana_folders | default([]))
+    }}
   loop_control:
     loop_var: grafana_folder_item
-  when: (grafana_folders | default([]) | length) > 0
+    label: "{{ grafana_folder_item.name | default('folder') }}"
+  when: >-
+    (grafana_alert_folders | default([]) | length) > 0
+    or (grafana_folders | default([]) | length) > 0
+
+- name: List Grafana datasources for alert rules
+  ansible.builtin.uri:
+    url: "{{ grafana_upload_alerts_url }}/api/datasources"
+    method: GET
+    url_username: >-
+      {{
+        grafana_upload_alerts_user
+        if (grafana_api_key | default('') | length) == 0
+        else omit
+      }}
+    url_password: >-
+      {{
+        grafana_upload_alerts_password
+        if (grafana_api_key | default('') | length) == 0
+        else omit
+      }}
+    force_basic_auth: "{{ (grafana_api_key | default('') | length) == 0 }}"
+    headers: >-
+      {{
+        {'Authorization': 'Bearer ' ~ grafana_api_key}
+        if (grafana_api_key | default('') | length) > 0
+        else {}
+      }}
+    status_code: [200]
+    validate_certs: "{{ grafana_validate_certs | default(false) }}"
+  register: grafana_upload_alerts_ds_list
+  when: (grafana_upload_alerts_work_items | length) > 0
+
+- name: Use the first Prometheus datasource for default alerts
+  ansible.builtin.set_fact:
+    grafana_upload_alerts_datasource_uid: >-
+      {{
+        (
+          grafana_upload_alerts_ds_list.json
+          | default([])
+          | selectattr('type', 'defined')
+          | selectattr('type', 'equalto', 'prometheus')
+          | map(attribute='uid')
+          | list
+          | first
+        ) | default('')
+      }}
+  when: (grafana_upload_alerts_work_items | length) > 0
+
+- name: Assert a Prometheus datasource exists for alert rules
+  ansible.builtin.assert:
+    that:
+      - grafana_upload_alerts_datasource_uid | default('') | length > 0
+    fail_msg: >-
+      grafana_upload_alerts needs a Prometheus datasource in Grafana
+      before the default OpenShift alert rules can be uploaded.
+  when: (grafana_upload_alerts_work_items | length) > 0
+
+- name: Ensure each alert folder exists in Grafana
+  ansible.builtin.uri:
+    url: "{{ grafana_upload_alerts_url }}/api/folders"
+    method: POST
+    body_format: json
+    body:
+      uid: "{{ item }}-folder"
+      title: "{{ item }}"
+    url_username: >-
+      {{
+        grafana_upload_alerts_user
+        if (grafana_api_key | default('') | length) == 0
+        else omit
+      }}
+    url_password: >-
+      {{
+        grafana_upload_alerts_password
+        if (grafana_api_key | default('') | length) == 0
+        else omit
+      }}
+    force_basic_auth: "{{ (grafana_api_key | default('') | length) == 0 }}"
+    headers: >-
+      {{
+        {'Authorization': 'Bearer ' ~ grafana_api_key}
+        if (grafana_api_key | default('') | length) > 0
+        else {'Content-Type': 'application/json'}
+      }}
+    status_code: [200, 201, 409, 412]
+    validate_certs: "{{ grafana_validate_certs | default(false) }}"
+  loop: >-
+    {{
+      grafana_upload_alerts_work_items
+      | map(attribute='folder')
+      | unique
+      | list
+    }}
+  loop_control:
+    label: "{{ item }}"
+  when: (grafana_upload_alerts_work_items | length) > 0
 
 - name: Materialize and upload each alert file
   ansible.builtin.include_tasks: upload-alert-file.yml
