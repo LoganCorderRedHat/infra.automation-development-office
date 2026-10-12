@@ -125,7 +125,21 @@
   register: gitlab_install_pg_sts_info
   failed_when: false
 
-- name: GitLab Postgres | Allow default SA anyuid SCC
+- name: GitLab Postgres | Create ServiceAccount
+  kubernetes.core.k8s:
+    validate_certs: "{{ gitlab_install_validate_certs }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: "{{ gitlab_install_pg_resource_name }}"
+        namespace: "{{ name_space }}"
+  when:
+    - gitlab_install_database_provision | default(true) | bool
+    - (gitlab_install_pg_sts_info.resources | default([]) | length) == 0
+
+- name: GitLab Postgres | Allow Postgres SA anyuid SCC
   kubernetes.core.k8s:
     validate_certs: "{{ gitlab_install_validate_certs }}"
     state: present
@@ -141,7 +155,7 @@
         name: system:openshift:scc:anyuid
       subjects:
         - kind: ServiceAccount
-          name: default
+          name: "{{ gitlab_install_pg_resource_name }}"
           namespace: "{{ name_space }}"
   when:
     - gitlab_install_database_provision | default(true) | bool
@@ -228,6 +242,7 @@
             annotations:
               ado.infra/postgres-init-revision: "4"
           spec:
+            serviceAccountName: "{{ gitlab_install_pg_resource_name }}"
             securityContext:
               fsGroup: 26
               fsGroupChangePolicy: OnRootMismatch

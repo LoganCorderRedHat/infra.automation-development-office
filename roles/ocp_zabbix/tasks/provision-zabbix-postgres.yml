@@ -113,7 +113,17 @@
         POSTGRESQL_DATABASE: "{{ ocp_zabbix_pg_db_name }}"
   no_log: true
 
-- name: Zabbix Postgres | Allow default SA anyuid SCC
+- name: Zabbix Postgres | Create ServiceAccount
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: "{{ ocp_zabbix_pg_resource_name }}"
+        namespace: "{{ name_space }}"
+
+- name: Zabbix Postgres | Allow Postgres SA anyuid SCC
   kubernetes.core.k8s:
     state: present
     definition:
@@ -128,7 +138,7 @@
         name: system:openshift:scc:anyuid
       subjects:
         - kind: ServiceAccount
-          name: default
+          name: "{{ ocp_zabbix_pg_resource_name }}"
           namespace: "{{ name_space }}"
 
 - name: Zabbix Postgres | Create PVC
@@ -171,6 +181,7 @@
             labels:
               app: "{{ ocp_zabbix_pg_resource_name }}"
           spec:
+            serviceAccountName: "{{ ocp_zabbix_pg_resource_name }}"
             securityContext:
               fsGroup: 26
               fsGroupChangePolicy: OnRootMismatch

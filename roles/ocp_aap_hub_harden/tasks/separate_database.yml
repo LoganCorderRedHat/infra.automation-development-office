@@ -358,7 +358,8 @@
       bash -lc
       "pg_restore -U postgres -d {{ ocp_aap_hub_harden_hub_db }}
       --no-owner --role={{ ocp_aap_hub_harden_hub_user }}
-      /tmp/automationhub.dump || true"
+      --exit-on-error
+      /tmp/automationhub.dump"
 
 - name: Ensure unmanaged Hub postgres secret
   kubernetes.core.k8s:

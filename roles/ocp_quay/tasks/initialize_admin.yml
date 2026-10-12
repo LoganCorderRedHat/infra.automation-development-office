@@ -124,7 +124,7 @@
       - -c
       - >-
         UPDATE "user"
-        SET password = $${{ ocp_quay_pw_hash.stdout | trim }}$$
+        SET password_hash = $${{ ocp_quay_pw_hash.stdout | trim }}$$
         WHERE username = '{{ ocp_quay_admin_user }}';
   register: ocp_quay_pw_sql
   no_log: true

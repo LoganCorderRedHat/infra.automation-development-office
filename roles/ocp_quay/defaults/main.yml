@@ -27,14 +27,15 @@ ocp_quay_redis_image: >-
 # local = PVC LocalStorage. minio = S3-compatible RadosGWStorage on ADO MinIO.
 ocp_quay_storage_backend: "{{ quay_storage_backend | default('local') }}"
 ocp_quay_s3_bucket: "{{ quay_s3_bucket | default('quay') }}"
-ocp_quay_s3_hostname: "{{ quay_s3_hostname | default('minio.minio.svc') }}"
-ocp_quay_s3_port: "{{ quay_s3_port | default(9000) }}"
+# Empty so inherit_minio_vars.yml can use vars_minio.yml. A non-empty
+# placeholder such as minio.minio.svc blocks that inheritance.
+ocp_quay_s3_hostname: "{{ quay_s3_hostname | default('') }}"
+ocp_quay_s3_port: "{{ quay_s3_port | default('') }}"
 ocp_quay_s3_is_secure: "{{ quay_s3_is_secure | default(false) }}"
-ocp_quay_s3_access_key: >-
-  {{ quay_s3_access_key | default(minio_root_user | default('minioadmin')) }}
+ocp_quay_s3_access_key: "{{ quay_s3_access_key | default('') }}"
 ocp_quay_s3_secret_key: >-
   {{ quay_s3_secret_key | default(minio_root_password | default('')) }}
-ocp_quay_s3_minio_namespace: "{{ quay_s3_minio_namespace | default('minio') }}"
+ocp_quay_s3_minio_namespace: "{{ quay_s3_minio_namespace | default('') }}"
 # Bucket Job image: UBI Python. Do not use quay.io/minio/mc.
 ocp_quay_minio_mc_image: >-
   {{

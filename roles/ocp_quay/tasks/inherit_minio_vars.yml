@@ -28,10 +28,25 @@
     ocp_quay_s3_minio_namespace: >-
       {{
         (
-          ocp_quay_s3_minio_namespace | default('') | string | trim
+          (minio_namespace | default('') | string | trim)
+          if (
+            (minio_namespace | default('') | string | trim | length) > 0
+            and (
+              (
+                ocp_quay_s3_minio_namespace
+                | default('')
+                | string
+                | trim
+                | length
+              ) == 0
+              or (ocp_quay_s3_minio_namespace | string | trim) == 'minio'
+            )
+          )
+          else (
+            (ocp_quay_s3_minio_namespace | default('') | string | trim)
+            or (minio_namespace | default('minio'))
+          )
         )
-        or (minio_namespace | default(''))
-        or 'minio'
       }}
 
 - name: Inherit empty Quay S3 settings from MinIO vars
@@ -39,27 +54,50 @@
     ocp_quay_s3_hostname: >-
       {{
         (
-          ocp_quay_s3_hostname | default('') | string | trim
-        )
-        or (
           (minio_service_name | default('minio'))
           ~ '.'
           ~ ocp_quay_s3_minio_namespace
           ~ '.svc'
         )
+        if (
+          (ocp_quay_s3_hostname | default('') | string | trim | length) == 0
+          or (ocp_quay_s3_hostname | string | trim) == 'minio.minio.svc'
+        )
+        else (ocp_quay_s3_hostname | string | trim)
       }}
     ocp_quay_s3_port: >-
       {{
-        ocp_quay_s3_port
-        | default(minio_api_port)
-        | default(9000)
+        (
+          minio_api_port | string
+        )
+        if (
+          (minio_api_port | default('') | string | trim | length) > 0
+          and (
+            (ocp_quay_s3_port | default('') | string | trim | length) == 0
+            or (ocp_quay_s3_port | string | trim) == '9000'
+          )
+        )
+        else (
+          (ocp_quay_s3_port | default('') | string | trim)
+          or (minio_api_port | default(9000) | string)
+        )
       }}
     ocp_quay_s3_access_key: >-
       {{
         (
-          ocp_quay_s3_access_key | default('') | string | trim
+          minio_root_user | string | trim
         )
-        or (minio_root_user | default('minioadmin'))
+        if (
+          (minio_root_user | default('') | string | trim | length) > 0
+          and (
+            (ocp_quay_s3_access_key | default('') | string | trim | length) == 0
+            or (ocp_quay_s3_access_key | string | trim) == 'minioadmin'
+          )
+        )
+        else (
+          (ocp_quay_s3_access_key | default('') | string | trim)
+          or (minio_root_user | default('minioadmin'))
+        )
       }}
     ocp_quay_s3_secret_key: >-
       {{

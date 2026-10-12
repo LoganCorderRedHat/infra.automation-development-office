@@ -26,7 +26,7 @@ Existing MariaDB installs are left on MariaDB unless you set
 | `zabbix_hostname` | Route hostname for the Zabbix web UI. | ✅ | `""` |
 | `zabbix_storage_size` | PVC size for Zabbix data. | ❌ | `20Gi` |
 | `zabbix_database_type` | `postgres` (default) or `mysql` / `mariadb`. | ❌ | `postgres` |
-| `zabbix_database_provision` | Provision ADO-managed PostgreSQL when type is `postgres`. | ❌ | `true` |
+| `zabbix_database_provision` | Provision ADO-managed PostgreSQL when type is `postgres`. `anyuid` is bound only to that Postgres ServiceAccount. | ❌ | `true` |
 | `zabbix_postgres_image` | PostgreSQL container image. | ❌ | `registry.redhat.io/rhel9/postgresql-15:latest` |
 | `zabbix_postgres_storage_size` | PVC size for dedicated PostgreSQL. | ❌ | `10Gi` |
 | `zabbix_postgres_storage_class` | StorageClass for dedicated PostgreSQL. Falls back to `storage`. | ❌ | `""` |

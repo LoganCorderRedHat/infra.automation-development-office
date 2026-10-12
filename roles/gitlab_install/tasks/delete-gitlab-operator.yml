@@ -40,6 +40,28 @@
     name: gitlab-postgresql
     namespace: "{{ name_space }}"
 
+- name: Delete PostgreSQL anyuid RoleBinding for GitLab
+  kubernetes.core.k8s:
+    validate_certs: "{{ gitlab_install_validate_certs }}"
+    state: absent
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        name: gitlab-postgresql-anyuid
+        namespace: "{{ name_space }}"
+
+- name: Delete PostgreSQL ServiceAccount for GitLab
+  kubernetes.core.k8s:
+    validate_certs: "{{ gitlab_install_validate_certs }}"
+    state: absent
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: gitlab-postgresql
+        namespace: "{{ name_space }}"
+
 - name: Delete PostgreSQL Service for GitLab
   kubernetes.core.k8s:
     validate_certs: "{{ gitlab_install_validate_certs }}"

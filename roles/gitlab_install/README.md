@@ -3,7 +3,7 @@
 Install and configure GitLab on OpenShift using the GitLab Operator and Custom Resource (CR).
 
 - Creates Kubernetes Secrets for TLS, root password, and Postgres credentials
-- Provisions dedicated in-cluster PostgreSQL (RHEL `postgresql-15`, Grafana-style Deployment + PVC)
+- Provisions dedicated in-cluster PostgreSQL (RHEL `postgresql-15`, Grafana-style Deployment + PVC). `anyuid` is bound only to that Postgres ServiceAccount.
 - Deploys the GitLab Operator CR with required references and settings
 - Supports idempotent updates and safe deletion
 - Uses **Ansible Vault** for storing sensitive secrets (root and DB passwords)

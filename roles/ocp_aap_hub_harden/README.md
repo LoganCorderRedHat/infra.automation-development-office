@@ -42,7 +42,12 @@ Automation Development Office
 
 Reruns are idempotent: when Hub already uses
 `external-hub-postgres-configuration`, migrate is skipped and only the
-worker pins plus CronJob are applied.
+worker pins plus CronJob are applied. `pg_restore` must succeed before
+those CRs are pointed at the dedicated secret. A failed restore stops
+the role and leaves Hub on the shared database. The dedicated-database
+secret and maintenance CronJob are skipped when
+`ocp_aap_hub_harden_separate_database` is false and Hub is not already
+on that secret.
 
 ## 🚀 Role Usage
 
