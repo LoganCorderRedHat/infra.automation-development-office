@@ -1,12 +1,43 @@
 ---
-- name: Assert required Hub harden facts
-  ansible.builtin.assert:
-    that:
-      - ocp_aap_hub_harden_namespace | length > 0
-      - ocp_aap_hub_harden_aap_name | length > 0
-    fail_msg: Set ocp_aap_hub_harden_namespace and ocp_aap_hub_harden_aap_name
+# yamllint disable rule:line-length
+- name: Discover AAP / Hub CRs and dedicated-DB state
+  ansible.builtin.include_tasks: discover.yml
 
-- name: Patch AutomationHub gunicorn workers/timeouts and dedicated DB secret
+- name: Report Hub already on dedicated Postgres
+  ansible.builtin.debug:
+    msg: >-
+      Hub {{ ocp_aap_hub_harden_namespace }}/{{ ocp_aap_hub_harden_automationhub_name }}
+      already uses {{ ocp_aap_hub_harden_postgres_secret }}. Skipping migrate.
+  when: ocp_aap_hub_harden_already_separated | bool
+
+- name: Separate Hub onto dedicated Postgres
+  ansible.builtin.include_tasks: separate_database.yml
+  when:
+    - ocp_aap_hub_harden_separate_database | default(true) | bool
+    - not (ocp_aap_hub_harden_already_separated | bool)
+
+- name: Patch AutomationHub gunicorn workers and timeouts
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: automationhub.ansible.com/v1beta1
+      kind: AutomationHub
+      metadata:
+        name: "{{ ocp_aap_hub_harden_automationhub_name }}"
+        namespace: "{{ ocp_aap_hub_harden_namespace }}"
+      spec:
+        gunicorn_api_workers: "{{ ocp_aap_hub_harden_gunicorn_api_workers | int }}"
+        gunicorn_content_workers: "{{ ocp_aap_hub_harden_gunicorn_content_workers | int }}"
+        gunicorn_timeout: "{{ ocp_aap_hub_harden_gunicorn_timeout | int }}"
+        haproxy_timeout: 180s
+        nginx_proxy_connect_timeout: 120s
+        nginx_proxy_read_timeout: 180s
+        nginx_proxy_send_timeout: 180s
+
+- name: Point AutomationHub at dedicated Postgres
+  when: >-
+    (ocp_aap_hub_harden_already_separated | bool)
+    or (ocp_aap_hub_harden_separate_database | default(true) | bool)
   kubernetes.core.k8s:
     state: present
     definition:
@@ -17,15 +48,31 @@
         namespace: "{{ ocp_aap_hub_harden_namespace }}"
       spec:
         postgres_configuration_secret: "{{ ocp_aap_hub_harden_postgres_secret }}"
-        gunicorn_api_workers: "{{ ocp_aap_hub_harden_gunicorn_api_workers | int }}"
-        gunicorn_content_workers: "{{ ocp_aap_hub_harden_gunicorn_content_workers | int }}"
-        gunicorn_timeout: "{{ ocp_aap_hub_harden_gunicorn_timeout | int }}"
-        haproxy_timeout: 180s
-        nginx_proxy_connect_timeout: 120s
-        nginx_proxy_read_timeout: 180s
-        nginx_proxy_send_timeout: 180s
 
-- name: Patch parent AAP CR Hub replicas and dedicated DB secret
+- name: Patch parent AAP CR Hub replicas
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: aap.ansible.com/v1alpha1
+      kind: AnsibleAutomationPlatform
+      metadata:
+        name: "{{ ocp_aap_hub_harden_aap_name }}"
+        namespace: "{{ ocp_aap_hub_harden_namespace }}"
+      spec:
+        hub:
+          api:
+            replicas: "{{ ocp_aap_hub_harden_api_replicas | int }}"
+          content:
+            replicas: "{{ ocp_aap_hub_harden_content_replicas | int }}"
+          worker:
+            replicas: "{{ ocp_aap_hub_harden_worker_replicas | int }}"
+          web:
+            replicas: "{{ ocp_aap_hub_harden_web_replicas | int }}"
+
+- name: Point parent AAP CR Hub at dedicated Postgres
+  when: >-
+    (ocp_aap_hub_harden_already_separated | bool)
+    or (ocp_aap_hub_harden_separate_database | default(true) | bool)
   kubernetes.core.k8s:
     state: present
     definition:
@@ -37,15 +84,11 @@
       spec:
         hub:
           postgres_configuration_secret: "{{ ocp_aap_hub_harden_postgres_secret }}"
-          api:
-            replicas: "{{ ocp_aap_hub_harden_api_replicas | int }}"
-          content:
-            replicas: "{{ ocp_aap_hub_harden_content_replicas | int }}"
-          worker:
-            replicas: "{{ ocp_aap_hub_harden_worker_replicas | int }}"
-          web:
-            replicas: "{{ ocp_aap_hub_harden_web_replicas | int }}"
 
 - name: Install Hub stability maintenance CronJob
-  when: ocp_aap_hub_harden_install_maintenance_cronjob | bool
+  when:
+    - ocp_aap_hub_harden_install_maintenance_cronjob | bool
+    - >-
+      (ocp_aap_hub_harden_already_separated | bool)
+      or (ocp_aap_hub_harden_separate_database | default(true) | bool)
   ansible.builtin.include_tasks: install_cronjob.yml

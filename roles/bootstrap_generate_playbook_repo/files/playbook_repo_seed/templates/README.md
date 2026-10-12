@@ -2,7 +2,9 @@
 
 Copied into generated playbook repos by `infra.ado.bootstrap_generate_playbook_repo`.
 
-Layout matches Grafana multi-folder upload (`grafana_folders`):
+These trees stay in the generated repo. Default Grafana folders are
+Applications, Security, and Infrastucture (`dashboards/<folder name>`).
+Point a folder source here when you want the OpenShift or RHACS templates:
 
 | Grafana folder | Path | Mode |
 |----------------|------|------|
@@ -32,23 +34,27 @@ switch `Openshift-Prod` / `Openshift-Dev` (same pattern as cert-manager expiry).
 | `Openshift-Prod` | Local `thanos-querier` (platform + user-workload) |
 | `Openshift-Dev` | Remote Dev thanos-querier URL + `grafana-openshift-dev-prometheus` Secret |
 
+Dashboard titles use `OpenShift — <what it shows>` so the folder list is
+scannable. `adapt-dashboard-for-folder.py` keeps that prefix: pinned folders
+become `OpenShift Prod — …` / `OpenShift Infra — …`.
+
 ### OpenShift template inventory
 
-| File | Base UID |
-|------|----------|
-| `openshift-k8s-dashboard.json.j2` | `ado-ocp-k8s-dashboard` |
-| `openshift-cluster-resource-overview.json.j2` | `ado-ocp-resource-overview` |
-| `cert-manager-expiry.json.j2` | `ado-cert-manager-expiry` |
-| `keycloak-metrics.json.j2` | `ado-keycloak-metrics` |
-| `Openshift-Cluster-Overview.json.j2` | `ado-openshift-cluster-overview-json` |
-| `openshift-api-monitoring.json.j2` | `k8s_system_apisrv` |
-| `openshift-cluster-details.json.j2` | `icjpCppik` |
-| `openshift-cluster-metrics.json.j2` | `dxkdT-eWz` |
-| `openshift-node-full-border.json.j2` | `rYdddlPWk` |
-| `openshift-pod-cluster-montitoring.json.j2` | `AAOMjeHmk` |
-| `openshift-projects.json.j2` | `000000011` |
-| `openshift-user-metrics.json.j2` | `isFoa0z7k` |
-| `openshift_cluster_health.json.j2` | `bekvxj0fqfi80a` |
+| File | Title (seed) | Base UID |
+|------|--------------|----------|
+| `openshift_cluster_health.json.j2` | OpenShift — Cluster health and node readiness | `bekvxj0fqfi80a` |
+| `openshift-cluster-metrics.json.j2` | OpenShift — Cluster operators, alerts, and capacity | `dxkdT-eWz` |
+| `openshift-cluster-resource-overview.json.j2` | OpenShift — Cluster CPU, memory, disk, and network | `ado-ocp-resource-overview` |
+| `openshift-cluster-details.json.j2` | OpenShift — Cluster node and workload detail | `icjpCppik` |
+| `Openshift-Cluster-Overview.json.j2` | OpenShift — Cluster overview | `ado-openshift-cluster-overview-json` |
+| `openshift-projects.json.j2` | OpenShift — Project quotas and usage | `000000011` |
+| `openshift-api-monitoring.json.j2` | OpenShift — API server health and latency | `k8s_system_apisrv` |
+| `openshift-k8s-dashboard.json.j2` | OpenShift — Namespace and node resource drill-down | `ado-ocp-k8s-dashboard` |
+| `openshift-node-full-exporter.json.j2` | OpenShift — Node OS CPU, memory, disk, and network | `rYdddlPWk` |
+| `openshift-pod-cluster-montitoring.json.j2` | OpenShift — Pod and cluster Prometheus monitoring | `AAOMjeHmk` |
+| `openshift-user-metrics.json.j2` | OpenShift — Grafana self-metrics | `isFoa0z7k` |
+| `cert-manager-expiry.json.j2` | OpenShift — Certificate expiry | `ado-cert-manager-expiry` |
+| `keycloak-metrics.json.j2` | OpenShift — Keycloak JVM, HTTP, and login metrics | `ado-keycloak-metrics` |
 
 Pinned folders append `-prod` / `-dev` to the UID so Grafana can keep all three copies.
 
@@ -63,32 +69,20 @@ Run **ADO | Deploy Grafana** (full) or **ADO | Deploy Grafana Dashboards**
 Example `grafana_folders` (defaults in `components_defaults.yml`):
 
 ```yaml
-grafana_group_cluster_dashboards: true
 grafana_folders:
-  - name: OpenshiftProd
+  - name: Applications
     source_type: path
-    source: templates/Openshift
-    dashboards_path: dashboards
-    datasource_mode: pin
-    datasource: Openshift-Prod
-    uid_suffix: "-prod"
-    title_cluster: Prod
-  - name: OpenshiftDev
-    source_type: path
-    source: templates/Openshift
-    dashboards_path: dashboards
-    datasource_mode: pin
-    datasource: Openshift-Dev
-    uid_suffix: "-dev"
-    title_cluster: Dev
-  - name: Openshift
-    source_type: path
-    source: templates/Openshift
-    dashboards_path: dashboards
+    source: "."
+    dashboards_path: dashboards/Applications
     datasource_mode: multi
-  - name: RHACS
+  - name: Security
     source_type: path
-    source: templates/RHACS
-    dashboards_path: dashboards
+    source: "."
+    dashboards_path: dashboards/Security
     datasource_mode: none
+  - name: Infrastucture
+    source_type: path
+    source: "."
+    dashboards_path: dashboards/Infrastucture
+    datasource_mode: multi
 ```

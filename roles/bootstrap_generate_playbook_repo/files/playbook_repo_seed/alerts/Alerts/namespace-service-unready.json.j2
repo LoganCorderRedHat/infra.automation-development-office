@@ -1,0 +1,96 @@
+{
+  "uid": "ado-namespace-service-unready",
+  "title": "Namespace has running pods but a Service has no endpoints",
+  "condition": "C",
+  "data": [
+    {
+      "refId": "A",
+      "queryType": "",
+      "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+      },
+      "datasourceUid": "{{ grafana_upload_alerts_datasource_uid }}",
+      "model": {
+        "editorMode": "code",
+        "expr": "count((count by (namespace) (kube_pod_status_phase{phase=\"Running\"} == 1) > 0) and on (namespace) (count by (namespace) (kube_endpoint_address_available == 0) > 0))",
+        "instant": true,
+        "intervalMs": 1000,
+        "maxDataPoints": 43200,
+        "refId": "A"
+      }
+    },
+    {
+      "refId": "B",
+      "queryType": "",
+      "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+      },
+      "datasourceUid": "__expr__",
+      "model": {
+        "datasource": {
+          "type": "__expr__",
+          "uid": "__expr__"
+        },
+        "expression": "A",
+        "reducer": "last",
+        "refId": "B",
+        "type": "reduce"
+      }
+    },
+    {
+      "refId": "C",
+      "queryType": "",
+      "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+      },
+      "datasourceUid": "__expr__",
+      "model": {
+        "datasource": {
+          "type": "__expr__",
+          "uid": "__expr__"
+        },
+        "expression": "B",
+        "refId": "C",
+        "type": "threshold",
+        "conditions": [
+          {
+            "evaluator": {
+              "params": [
+                0
+              ],
+              "type": "gt"
+            },
+            "operator": {
+              "type": "and"
+            },
+            "query": {
+              "params": [
+                "C"
+              ]
+            },
+            "reducer": {
+              "params": [],
+              "type": "last"
+            },
+            "type": "query"
+          }
+        ]
+      }
+    }
+  ],
+  "noDataState": "OK",
+  "execErrState": "Error",
+  "for": "5m",
+  "annotations": {
+    "summary": "A namespace still has Running pods, and at least one Service in that namespace has no ready endpoints. This is the portable stand-in for a route that looks down."
+  },
+  "labels": {
+    "ado": "openshift-default"
+  },
+  "folderUID": "{{ grafana_upload_alerts_folder_uid }}",
+  "ruleGroup": "openshift-default",
+  "orgID": 1
+}
