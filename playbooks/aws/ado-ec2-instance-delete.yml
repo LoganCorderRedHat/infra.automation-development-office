@@ -1,0 +1,89 @@
+---
+# yamllint disable rule:line-length
+# Terminate EC2 instance(s) (amazon.aws.ec2_instance state=absent).
+# Examples adapted from:
+# https://docs.ansible.com/ansible/latest/collections/amazon/aws/ec2_instance_module.html
+#
+# Provide one of:
+#   ec2_instance_ids: ["i-0123456789abcdef0"]
+#   ec2_instance_name: my-instance   # resolved via tag:Name filter
+# Optional:
+#   ec2_instance_region, ec2_instance_wait, ec2_instance_wait_timeout
+# Auth: AWS env vars, aws_profile, or vault_aws_* keys
+
+- name: ADO | Delete EC2 instance
+  hosts: localhost
+  gather_facts: false
+  vars:
+    ec2_instance_wait: true
+    ec2_instance_wait_timeout: 600
+    ec2_instance_ids: []
+  tasks:
+    - name: Assert instance target for delete
+      ansible.builtin.assert:
+        that:
+          - >-
+            (ec2_instance_ids | default([]) | length) > 0
+            or (ec2_instance_name | default('') | string | length) > 0
+        fail_msg: >-
+          Set ec2_instance_ids and/or ec2_instance_name. Refusing a region-wide
+          terminate.
+
+    - name: Terminate EC2 instance(s)
+      amazon.aws.ec2_instance:
+        state: absent
+        instance_ids: >-
+          {{
+            ec2_instance_ids
+            if (ec2_instance_ids | default([]) | length) > 0
+            else omit
+          }}
+        filters: >-
+          {{
+            {'tag:Name': ec2_instance_name}
+            if (
+              (ec2_instance_ids | default([]) | length) == 0
+              and (ec2_instance_name | default('') | string | length) > 0
+            )
+            else omit
+          }}
+        wait: "{{ ec2_instance_wait | bool }}"
+        wait_timeout: "{{ ec2_instance_wait_timeout | int }}"
+        region: >-
+          {{
+            ec2_instance_region
+            if (ec2_instance_region | default('') | string | length) > 0
+            else omit
+          }}
+        access_key: >-
+          {{
+            vault_aws_access_key_id
+            if (vault_aws_access_key_id | default('') | length) > 0
+            else omit
+          }}
+        secret_key: >-
+          {{
+            vault_aws_secret_access_key
+            if (vault_aws_secret_access_key | default('') | length) > 0
+            else omit
+          }}
+        session_token: >-
+          {{
+            vault_aws_session_token
+            if (vault_aws_session_token | default('') | length) > 0
+            else omit
+          }}
+        profile: >-
+          {{
+            aws_profile
+            if (aws_profile | default('') | string | length) > 0
+            else omit
+          }}
+      register: ado_ec2_instance_delete
+
+    - name: Show terminate result
+      ansible.builtin.debug:
+        msg:
+          changed_ids: "{{ ado_ec2_instance_delete.changed_ids | default([]) }}"
+          instance_ids: "{{ ado_ec2_instance_delete.instance_ids | default([]) }}"
+# yamllint enable rule:line-length

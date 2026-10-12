@@ -1,0 +1,6 @@
+---
+minor_changes:
+  - |
+    playbooks - Add standalone AWS EC2 instance create, delete, modify, and
+    info playbooks under ``playbooks/aws/`` using ``amazon.aws.ec2_instance``
+    and ``amazon.aws.ec2_instance_info``.
