@@ -88,7 +88,8 @@
         + [
           {
             'name': (item.path | basename | regex_replace('\\.json(\\.j2)?$', '')),
-            'path': item.path
+            'path': item.path,
+            'folder': grafana_folder_item.name | default('Alerts')
           }
         ]
       }}

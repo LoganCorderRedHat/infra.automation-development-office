@@ -1,0 +1,113 @@
+---
+# When MinIO was installed by ADO in this env, reuse its group_vars.
+# Quay S3 fields on the form are optional overrides of those values.
+- name: Find existing MinIO group_vars
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/../../group_vars/all/{{ env }}/{{ item }}"
+  loop:
+    - vars_minio.yml
+    - vault_minio.yml
+  register: ocp_quay_minio_vars_stat
+  when:
+    - env is defined
+    - playbook_dir is defined
+
+- name: Load existing MinIO group_vars
+  ansible.builtin.include_vars:
+    file: "{{ item.stat.path }}"
+  loop: "{{ ocp_quay_minio_vars_stat.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item | default(item.stat.path | default('')) }}"
+  when:
+    - item.stat is defined
+    - item.stat.exists | default(false)
+  no_log: "{{ 'vault_minio' in (item.item | default('')) }}"
+
+- name: Resolve MinIO namespace for Quay S3
+  ansible.builtin.set_fact:
+    ocp_quay_s3_minio_namespace: >-
+      {{
+        (
+          (minio_namespace | default('') | string | trim)
+          if (
+            (minio_namespace | default('') | string | trim | length) > 0
+            and (
+              (
+                ocp_quay_s3_minio_namespace
+                | default('')
+                | string
+                | trim
+                | length
+              ) == 0
+              or (ocp_quay_s3_minio_namespace | string | trim) == 'minio'
+            )
+          )
+          else (
+            (ocp_quay_s3_minio_namespace | default('') | string | trim)
+            or (minio_namespace | default('minio'))
+          )
+        )
+      }}
+
+- name: Inherit empty Quay S3 settings from MinIO vars
+  ansible.builtin.set_fact:
+    ocp_quay_s3_hostname: >-
+      {{
+        (
+          (minio_service_name | default('minio'))
+          ~ '.'
+          ~ ocp_quay_s3_minio_namespace
+          ~ '.svc'
+        )
+        if (
+          (ocp_quay_s3_hostname | default('') | string | trim | length) == 0
+          or (ocp_quay_s3_hostname | string | trim) == 'minio.minio.svc'
+        )
+        else (ocp_quay_s3_hostname | string | trim)
+      }}
+    ocp_quay_s3_port: >-
+      {{
+        (
+          minio_api_port | string
+        )
+        if (
+          (minio_api_port | default('') | string | trim | length) > 0
+          and (
+            (ocp_quay_s3_port | default('') | string | trim | length) == 0
+            or (ocp_quay_s3_port | string | trim) == '9000'
+          )
+        )
+        else (
+          (ocp_quay_s3_port | default('') | string | trim)
+          or (minio_api_port | default(9000) | string)
+        )
+      }}
+    ocp_quay_s3_access_key: >-
+      {{
+        (
+          minio_root_user | string | trim
+        )
+        if (
+          (minio_root_user | default('') | string | trim | length) > 0
+          and (
+            (ocp_quay_s3_access_key | default('') | string | trim | length) == 0
+            or (ocp_quay_s3_access_key | string | trim) == 'minioadmin'
+          )
+        )
+        else (
+          (ocp_quay_s3_access_key | default('') | string | trim)
+          or (minio_root_user | default('minioadmin'))
+        )
+      }}
+    ocp_quay_s3_secret_key: >-
+      {{
+        (
+          ocp_quay_s3_secret_key | default('') | string | trim
+        )
+        or (minio_root_password | default(''))
+      }}
+    ocp_quay_s3_bucket: >-
+      {{
+        (ocp_quay_s3_bucket | default('') | string | trim)
+        or 'quay'
+      }}

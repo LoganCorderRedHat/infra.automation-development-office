@@ -128,4 +128,9 @@
         ]
       }}
   loop: "{{ grafana_upload_dashboards_found.files | default([]) }}"
-  when: grafana_upload_dashboards_found is defined
+  when:
+    - grafana_upload_dashboards_found is defined
+    - >-
+      grafana_folder_item.include_files is not defined
+      or (item.path | basename) in
+      (grafana_folder_item.include_files | default([]))
