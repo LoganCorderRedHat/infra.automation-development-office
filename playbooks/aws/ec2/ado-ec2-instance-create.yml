@@ -14,7 +14,9 @@
 #   ec2_instance_key_name, ec2_instance_security_group,
 #   ec2_instance_security_groups, ec2_instance_tags,
 #   ec2_instance_assign_public_ip, ec2_instance_volumes,
-#   ec2_instance_region, ec2_instance_wait, ec2_instance_wait_timeout
+#   ec2_instance_region, ec2_instance_wait, ec2_instance_wait_timeout,
+#   ec2_instance_filters (override amazon.aws default match filters;
+#     useful for fakecloud where subnet-id placement may not stick)
 # Auth (any one path): AWS env vars, aws_profile, or vault_aws_* keys
 
 - name: ADO | Create EC2 instance
@@ -27,6 +29,7 @@
     ec2_instance_tags: {}
     ec2_instance_security_groups: []
     ec2_instance_volumes: []
+    ec2_instance_filters: {}
   tasks:
     - name: Assert required vars for create
       ansible.builtin.assert:
@@ -79,6 +82,12 @@
           {{
             ec2_instance_tags
             if (ec2_instance_tags | default({}) | length) > 0
+            else omit
+          }}
+        filters: >-
+          {{
+            ec2_instance_filters
+            if (ec2_instance_filters | default({}) | length) > 0
             else omit
           }}
         state: present
