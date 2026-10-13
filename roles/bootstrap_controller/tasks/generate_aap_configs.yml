@@ -200,6 +200,11 @@
         - ado-ec2-instance-modify-bootstrap.jt.yml
         - ado-ec2-instance-info-bootstrap.jt.yml
 
+      s3_bucket_policy:
+        - ado-s3-bucket-policy-set-bootstrap.jt.yml
+        - ado-s3-bucket-policy-set-from-file-bootstrap.jt.yml
+        - ado-s3-bucket-policy-info-bootstrap.jt.yml
+
       gitlab:
         - ado-gitlab-deploy-and-configure-bootstrap.jt.yml
         - ado-install-gitlab-standalone-bootstrap.jt.yml

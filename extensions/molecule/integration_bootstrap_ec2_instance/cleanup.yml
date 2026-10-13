@@ -16,4 +16,10 @@
         - inventory
         - collections
         - templates
+        - alerts
+        - dashboards
+        - ansible.cfg
+        - .component-catalog.json
+        - component-run-plan.json
+        - local_components.py
         - ado-preflight-ec2-instance.json

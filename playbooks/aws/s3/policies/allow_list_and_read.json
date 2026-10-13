@@ -1,0 +1,38 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowRoleList",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::{{ s3_bucket_aws_account_id }}:role/{{ s3_bucket_reader_role_name }}"
+      },
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::{{ s3_bucket_name }}"
+    },
+    {
+      "Sid": "AllowRoleRead",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::{{ s3_bucket_aws_account_id }}:role/{{ s3_bucket_reader_role_name }}"
+      },
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::{{ s3_bucket_name }}/*"
+    },
+    {
+      "Sid": "DenyInsecureTransport",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::{{ s3_bucket_name }}",
+        "arn:aws:s3:::{{ s3_bucket_name }}/*"
+      ],
+      "Condition": {
+        "Bool": {
+          "aws:SecureTransport": "false"
+        }
+      }
+    }
+  ]
+}

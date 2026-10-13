@@ -1,0 +1,68 @@
+---
+# yamllint disable rule:line-length
+- name: Verify - s3_bucket_policy fakecloud scenario
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - s3_bucket_policy_vars.yml
+
+  tasks:
+    - name: Read bucket policy via amazon.aws.s3_bucket_info
+      amazon.aws.s3_bucket_info:
+        name: "{{ s3_bucket_policy_molecule_name }}"
+        region: "{{ s3_bucket_policy_molecule_region }}"
+        bucket_facts:
+          bucket_policy: true
+        endpoint_url: "{{ lookup('env', 'AWS_ENDPOINT_URL') | default(omit, true) }}"
+        aws_config:
+          s3:
+            addressing_style: path
+      register: s3_bucket_policy_molecule_verify
+
+    - name: Parse returned policy document
+      ansible.builtin.set_fact:
+        s3_bucket_policy_molecule_policy: >-
+          {{ _policy if _policy is mapping else (_policy | from_json) }}
+      vars:
+        _raw: >-
+          {{
+            s3_bucket_policy_molecule_verify.buckets[0].bucket_policy
+            | default({})
+          }}
+        _policy: "{{ _raw.Policy | default(_raw) }}"
+
+    - name: Assert from-file policy statements are present
+      ansible.builtin.assert:
+        that:
+          - s3_bucket_policy_molecule_verify.buckets | length == 1
+          - >-
+            s3_bucket_policy_molecule_verify.buckets[0].name
+            == s3_bucket_policy_molecule_name
+          - s3_bucket_policy_molecule_policy.Statement | length >= 2
+          - >-
+            'AllowRoleList' in (
+              s3_bucket_policy_molecule_policy.Statement
+              | map(attribute='Sid')
+              | list
+            )
+          - >-
+            'AllowRoleRead' in (
+              s3_bucket_policy_molecule_policy.Statement
+              | map(attribute='Sid')
+              | list
+            )
+          - >-
+            'DenyInsecureTransport' in (
+              s3_bucket_policy_molecule_policy.Statement
+              | map(attribute='Sid')
+              | list
+            )
+        fail_msg: >-
+          Expected sample List/Read/Deny policy on
+          {{ s3_bucket_policy_molecule_name }} in fakecloud.
+        success_msg: >-
+          Verified policy on {{ s3_bucket_policy_molecule_name }} via
+          bootstrap import_playbook path.
+# yamllint enable rule:line-length

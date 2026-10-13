@@ -1,0 +1,90 @@
+---
+# yamllint disable rule:line-length
+# Converge exercises the post-bootstrap user path:
+#   promote facts (same tasks as seed bootstrap) -> import_playbook collection FQCN
+# for set (inline), set_from_file, and info against fakecloud.
+- name: Load prepare artifacts and promote inline set vars (bootstrap style)
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - s3_bucket_policy_vars.yml
+
+  tasks:
+    - name: Load planned bucket name
+      ansible.builtin.slurp:
+        src: "{{ s3_bucket_policy_molecule_bucket_file }}"
+      register: s3_bucket_policy_molecule_bucket_raw
+
+    - name: Set inline-set inputs expected by seed promote tasks
+      ansible.builtin.set_fact:
+        s3_bucket_name: "{{ s3_bucket_policy_molecule_bucket_raw.content | b64decode | trim }}"
+        s3_bucket_region: "{{ s3_bucket_policy_molecule_region }}"
+        s3_bucket_aws_account_id: "{{ s3_bucket_policy_molecule_account_id }}"
+        s3_bucket_reader_role_name: "{{ s3_bucket_policy_molecule_reader_role }}"
+        s3_bucket_endpoint_url: "{{ lookup('env', 'AWS_ENDPOINT_URL') | default('', true) }}"
+        s3_bucket_policy_file: ""
+
+    - name: ADO | Promote vars for imported set playbook
+      ansible.builtin.include_tasks: "{{ s3_bucket_policy_molecule_promote_tasks }}"
+
+- ansible.builtin.import_playbook: infra.ado.aws.s3.ado_s3_bucket_policy_set
+
+- name: Re-run inline set to assert bootstrap import path is idempotent
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - s3_bucket_policy_vars.yml
+
+  tasks:
+    - name: ADO | Promote vars for second set import
+      ansible.builtin.include_tasks: "{{ s3_bucket_policy_molecule_promote_tasks }}"
+
+- ansible.builtin.import_playbook: infra.ado.aws.s3.ado_s3_bucket_policy_set
+
+- name: Promote set-from-file vars (sample policy with ListBucket + GetObject)
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - s3_bucket_policy_vars.yml
+
+  tasks:
+    - name: Set from-file inputs
+      ansible.builtin.set_fact:
+        s3_bucket_name: "{{ s3_bucket_policy_molecule_name }}"
+        s3_bucket_region: "{{ s3_bucket_policy_molecule_region }}"
+        s3_bucket_aws_account_id: "{{ s3_bucket_policy_molecule_account_id }}"
+        s3_bucket_reader_role_name: "{{ s3_bucket_policy_molecule_reader_role }}"
+        s3_bucket_policy_file: "{{ s3_bucket_policy_molecule_policy_file }}"
+        s3_bucket_endpoint_url: "{{ lookup('env', 'AWS_ENDPOINT_URL') | default('', true) }}"
+
+    - name: ADO | Promote vars for imported set-from-file playbook
+      ansible.builtin.include_tasks: "{{ s3_bucket_policy_molecule_promote_tasks }}"
+
+- ansible.builtin.import_playbook: infra.ado.aws.s3.ado_s3_bucket_policy_set_from_file
+
+- name: Promote info vars
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - s3_bucket_policy_vars.yml
+
+  tasks:
+    - name: Set info inputs
+      ansible.builtin.set_fact:
+        s3_bucket_name: "{{ s3_bucket_policy_molecule_name }}"
+        s3_bucket_region: "{{ s3_bucket_policy_molecule_region }}"
+        s3_bucket_endpoint_url: "{{ lookup('env', 'AWS_ENDPOINT_URL') | default('', true) }}"
+
+    - name: ADO | Promote vars for imported info playbook
+      ansible.builtin.include_tasks: "{{ s3_bucket_policy_molecule_promote_tasks }}"
+
+- ansible.builtin.import_playbook: infra.ado.aws.s3.ado_s3_bucket_policy_info
+# yamllint enable rule:line-length

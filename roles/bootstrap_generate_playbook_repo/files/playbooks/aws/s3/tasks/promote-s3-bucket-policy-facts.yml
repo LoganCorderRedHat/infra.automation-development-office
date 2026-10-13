@@ -1,0 +1,23 @@
+---
+# yamllint disable rule:line-length
+# Promote bootstrap vars_files / resolve_component results to host facts so a
+# following import_playbook (collection FQCN) sees them on localhost.
+- name: ADO | Promote S3 bucket policy and shared AWS vars to facts
+  ansible.builtin.set_fact:
+    s3_bucket_name: "{{ s3_bucket_name | default('') }}"
+    s3_bucket_region: "{{ s3_bucket_region | default(aws_default_region | default('')) }}"
+    s3_bucket_aws_account_id: "{{ s3_bucket_aws_account_id | default('123456789012') }}"
+    s3_bucket_reader_role_name: "{{ s3_bucket_reader_role_name | default('AppReader') }}"
+    s3_bucket_policy_file: "{{ s3_bucket_policy_file | default('') }}"
+    s3_bucket_endpoint_url: "{{ s3_bucket_endpoint_url | default('') }}"
+    vault_aws_access_key_id: "{{ vault_aws_access_key_id | default('') }}"
+    vault_aws_secret_access_key: "{{ vault_aws_secret_access_key | default('') }}"
+    vault_aws_session_token: "{{ vault_aws_session_token | default('') }}"
+    aws_profile: "{{ aws_profile | default('') }}"
+    aws_default_region: "{{ aws_default_region | default('') }}"
+
+- name: ADO | Promote optional inline policy document when defined
+  ansible.builtin.set_fact:
+    s3_bucket_policy: "{{ s3_bucket_policy }}"
+  when: s3_bucket_policy is defined
+# yamllint enable rule:line-length

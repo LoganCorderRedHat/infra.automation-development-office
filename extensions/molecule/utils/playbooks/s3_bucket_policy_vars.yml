@@ -1,0 +1,28 @@
+---
+# yamllint disable rule:line-length
+# Shared vars for s3_bucket_policy Molecule fakecloud scenarios (via vars_files).
+s3_bucket_policy_molecule_region: us-east-1
+s3_bucket_policy_molecule_name: molecule-ado-s3-bucket-policy
+s3_bucket_policy_molecule_account_id: "123456789012"
+s3_bucket_policy_molecule_reader_role: AppReader
+s3_bucket_policy_molecule_artifact_root: >-
+  /tmp/{{ lookup('env', 'MOLECULE_SCENARIO_NAME') | default('integration_s3_bucket_policy', true) }}
+s3_bucket_policy_molecule_bucket_file: >-
+  {{ s3_bucket_policy_molecule_artifact_root }}/bucket_name
+# Seed promote tasks (symlink to bootstrap seed file beside these playbooks).
+s3_bucket_policy_molecule_promote_tasks: >-
+  {{ playbook_dir }}/tasks/promote-s3-bucket-policy-facts.yml
+# Collection sample policy (Jinja) — used by set_from_file path.
+# Resolve from the installed infra.ado collection so the molecule/ symlink
+# under extensions/molecule does not break relative repo-root paths.
+s3_bucket_policy_molecule_policy_file: >-
+  {{
+    (
+      lookup('env', 'ANSIBLE_COLLECTIONS_PATH')
+      | default(lookup('env', 'HOME') ~ '/.ansible/collections', true)
+      | split(':')
+      | first
+    )
+    ~ '/ansible_collections/infra/ado/playbooks/aws/s3/policies/allow_list_and_read.json'
+  }}
+# yamllint enable rule:line-length

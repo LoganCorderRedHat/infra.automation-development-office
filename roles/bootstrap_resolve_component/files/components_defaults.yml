@@ -1161,8 +1161,17 @@ components_defaults:
     ec2_instance_filters: {}
     ec2_instance_include_attributes: []
 
+  s3_bucket_policy:
+    component: s3_bucket_policy
+    s3_bucket_name: ""
+    s3_bucket_region: ""
+    s3_bucket_aws_account_id: "123456789012"
+    s3_bucket_reader_role_name: AppReader
+    s3_bucket_policy_file: ""
+    s3_bucket_endpoint_url: ""
+
   # Shared AWS account credentials for bootstrap consumers (ec2_ami_copy,
-  # ec2_instance, cert-manager AWS PCA).
+  # ec2_instance, s3_bucket_policy, cert-manager AWS PCA).
   aws:
     aws_profile: ""
     aws_default_region: us-east-1

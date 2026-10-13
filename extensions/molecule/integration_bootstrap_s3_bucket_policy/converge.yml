@@ -1,0 +1,56 @@
+---
+- name: Generate bootstrap content for s3_bucket_policy
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  vars:
+    env: molecule
+    preflight_json: "{{ playbook_dir }}/ado-preflight-s3-bucket-policy.json"
+
+    generate_env_vars: true
+    generate_env_vars_force: true
+    generate_playbooks: true
+    generate_aap_configs: true
+    apply_aap_configs: false
+
+    generate_env_vars_encrypt_vault_files: false
+    generate_env_vars_encrypt_vault: false
+    generate_env_vars_vault_encrypt: false
+    generate_env_vars_prompt_encrypt_vault_files:
+      user_input: "n"
+    generate_env_vars_prompt_encrypt_vault:
+      user_input: "n"
+
+    generate_playbook_repo_pause_for_push: false
+    generate_playbook_repo_git_push: false
+    generate_playbook_repo_git_commit: false
+
+  pre_tasks:
+    - name: Clean previous generated content
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/{{ item }}"
+        state: absent
+      loop:
+        - playbooks
+        - configs
+        - group_vars
+        - inventory
+        - collections
+        - templates
+        - alerts
+        - dashboards
+        - ansible.cfg
+        - .component-catalog.json
+        - component-run-plan.json
+        - local_components.py
+        - ado-preflight-s3-bucket-policy.json
+
+    - name: Write AWS platform preflight JSON for s3_bucket_policy
+      ansible.builtin.copy:
+        src: ado-preflight-aws-s3-bucket-policy.fixture.json
+        dest: "{{ preflight_json }}"
+        mode: "0644"
+
+  roles:
+    - role: infra.ado.bootstrap_controller
