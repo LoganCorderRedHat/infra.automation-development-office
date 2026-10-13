@@ -14,3 +14,9 @@ minor_changes:
   - |
     playbooks/aws/s3 - Add portable S3 bucket policy collection playbooks with
     optional endpoint/path-style support for fakecloud and disconnected labs.
+
+doc_changes:
+  - |
+    README - Document AWS collection playbooks (EC2 instance and S3 bucket
+    policy), shared ``vault_aws.yml`` bootstrap apps, and fakecloud Molecule
+    coverage pointers.
