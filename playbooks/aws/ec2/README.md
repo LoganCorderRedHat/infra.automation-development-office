@@ -5,12 +5,26 @@ Thin wrappers around `amazon.aws.ec2_instance` and
 
 Requires `amazon.aws` (see collection `galaxy.yml`).
 
-| Playbook | Module | Purpose |
+Collection path: `playbooks/aws/ec2/`.
+
+| Playbook | Collection FQCN | Purpose |
 | --- | --- | --- |
-| `ado-ec2-instance-create.yml` | `ec2_instance` | Create / ensure present |
-| `ado-ec2-instance-delete.yml` | `ec2_instance` (`state=absent`) | Terminate by ID or Name tag |
-| `ado-ec2-instance-modify.yml` | `ec2_instance` | Stop/start/restart, type, tags, termination protection |
-| `ado-ec2-instance-info.yml` | `ec2_instance_info` | Describe / filter instances |
+| `ado-ec2-instance-create.yml` | `infra.ado.aws.ec2.ado-ec2-instance-create` | Create / ensure present |
+| `ado-ec2-instance-delete.yml` | `infra.ado.aws.ec2.ado-ec2-instance-delete` | Terminate by ID or Name tag |
+| `ado-ec2-instance-modify.yml` | `infra.ado.aws.ec2.ado-ec2-instance-modify` | Stop/start/restart, type, tags, termination protection |
+| `ado-ec2-instance-info.yml` | `infra.ado.aws.ec2.ado-ec2-instance-info` | Describe / filter instances |
+
+Run via collection FQCN (collection must be installed):
+
+```bash
+ansible-playbook infra.ado.aws.ec2.ado-ec2-instance-create -e @vars.yml
+```
+
+Or import from another playbook:
+
+```yaml
+- ansible.builtin.import_playbook: infra.ado.aws.ec2.ado-ec2-instance-create
+```
 
 ## Auth
 
