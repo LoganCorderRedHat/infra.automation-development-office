@@ -18,5 +18,5 @@
     - name: ADO | Promote vars for imported create playbook
       ansible.builtin.include_tasks: tasks/promote-ec2-instance-facts.yml
 
-- ansible.builtin.import_playbook: infra.ado.aws.ec2.ado-ec2-instance-create
+- ansible.builtin.import_playbook: infra.ado.aws.ec2.ado_ec2_instance_create
 # yamllint enable rule:line-length

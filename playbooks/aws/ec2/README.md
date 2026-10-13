@@ -9,21 +9,21 @@ Collection path: `playbooks/aws/ec2/`.
 
 | Playbook | Collection FQCN | Purpose |
 | --- | --- | --- |
-| `ado-ec2-instance-create.yml` | `infra.ado.aws.ec2.ado-ec2-instance-create` | Create / ensure present |
-| `ado-ec2-instance-delete.yml` | `infra.ado.aws.ec2.ado-ec2-instance-delete` | Terminate by ID or Name tag |
-| `ado-ec2-instance-modify.yml` | `infra.ado.aws.ec2.ado-ec2-instance-modify` | Stop/start/restart, type, tags, termination protection |
-| `ado-ec2-instance-info.yml` | `infra.ado.aws.ec2.ado-ec2-instance-info` | Describe / filter instances |
+| `ado_ec2_instance_create.yml` | `infra.ado.aws.ec2.ado_ec2_instance_create` | Create / ensure present |
+| `ado_ec2_instance_delete.yml` | `infra.ado.aws.ec2.ado_ec2_instance_delete` | Terminate by ID or Name tag |
+| `ado_ec2_instance_modify.yml` | `infra.ado.aws.ec2.ado_ec2_instance_modify` | Stop/start/restart, type, tags, termination protection |
+| `ado_ec2_instance_info.yml` | `infra.ado.aws.ec2.ado_ec2_instance_info` | Describe / filter instances |
 
 Run via collection FQCN (collection must be installed):
 
 ```bash
-ansible-playbook infra.ado.aws.ec2.ado-ec2-instance-create -e @vars.yml
+ansible-playbook infra.ado.aws.ec2.ado_ec2_instance_create -e @vars.yml
 ```
 
 Or import from another playbook:
 
 ```yaml
-- ansible.builtin.import_playbook: infra.ado.aws.ec2.ado-ec2-instance-create
+- ansible.builtin.import_playbook: infra.ado.aws.ec2.ado_ec2_instance_create
 ```
 
 ## Bootstrap (Contoller)
@@ -32,13 +32,16 @@ When ``aws`` / ``ec2_instance`` is selected in preflight, bootstrap seeds:
 
 | Seed playbook | Imports |
 | --- | --- |
-| `ado-ec2-instance-create-bootstrap.yml` | `infra.ado.aws.ec2.ado-ec2-instance-create` |
-| `ado-ec2-instance-delete-bootstrap.yml` | `infra.ado.aws.ec2.ado-ec2-instance-delete` |
-| `ado-ec2-instance-modify-bootstrap.yml` | `infra.ado.aws.ec2.ado-ec2-instance-modify` |
-| `ado-ec2-instance-info-bootstrap.yml` | `infra.ado.aws.ec2.ado-ec2-instance-info` |
+| `ado-ec2-instance-create-bootstrap.yml` | `infra.ado.aws.ec2.ado_ec2_instance_create` |
+| `ado-ec2-instance-delete-bootstrap.yml` | `infra.ado.aws.ec2.ado_ec2_instance_delete` |
+| `ado-ec2-instance-modify-bootstrap.yml` | `infra.ado.aws.ec2.ado_ec2_instance_modify` |
+| `ado-ec2-instance-info-bootstrap.yml` | `infra.ado.aws.ec2.ado_ec2_instance_info` |
 
 Seeds load ``vault_aws.yml`` + ``vars_ec2_instance.yml`` for ``env``, resolve
 component defaults, then ``import_playbook`` the collection FQCN.
+
+Functional fakecloud coverage (bootstrap promote + ``import_playbook`` path):
+``extensions/molecule/integration_ec2_instance``.
 
 ## Auth
 

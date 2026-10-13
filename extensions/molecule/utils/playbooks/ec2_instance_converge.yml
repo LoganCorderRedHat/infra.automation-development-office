@@ -1,0 +1,143 @@
+---
+# yamllint disable rule:line-length
+# Converge exercises the post-bootstrap user path:
+#   promote facts (same tasks as seed bootstrap) -> import_playbook collection FQCN
+# for create, info, and modify against fakecloud.
+- name: Load prepare artifacts and promote create vars (bootstrap style)
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - ec2_instance_vars.yml
+
+  tasks:
+    - name: Load prepared AMI id
+      ansible.builtin.slurp:
+        src: "{{ ec2_instance_molecule_ami_file }}"
+      register: ec2_instance_molecule_ami_raw
+
+    - name: Load prepared subnet id
+      ansible.builtin.slurp:
+        src: "{{ ec2_instance_molecule_subnet_file }}"
+      register: ec2_instance_molecule_subnet_raw
+
+    - name: Set create inputs expected by seed promote tasks
+      ansible.builtin.set_fact:
+        ec2_instance_name: "{{ ec2_instance_molecule_name }}"
+        ec2_instance_image_id: "{{ ec2_instance_molecule_ami_raw.content | b64decode | trim }}"
+        ec2_instance_type: "{{ ec2_instance_molecule_type }}"
+        ec2_instance_subnet_id: "{{ ec2_instance_molecule_subnet_raw.content | b64decode | trim }}"
+        ec2_instance_region: "{{ ec2_instance_molecule_region }}"
+        ec2_instance_wait: true
+        ec2_instance_wait_timeout: 120
+        ec2_instance_assign_public_ip: false
+        ec2_instance_tags:
+          Name: "{{ ec2_instance_molecule_name }}"
+          MoleculeScenario: integration_ec2_instance
+        # fakecloud may ignore requested subnet; match by Name for idempotency
+        ec2_instance_filters:
+          "tag:Name": "{{ ec2_instance_molecule_name }}"
+          instance-state-name:
+            - pending
+            - running
+            - stopping
+            - stopped
+
+    - name: ADO | Promote vars for imported create playbook
+      ansible.builtin.include_tasks: "{{ ec2_instance_molecule_promote_tasks }}"
+
+- ansible.builtin.import_playbook: infra.ado.aws.ec2.ado_ec2_instance_create
+
+- name: Re-run create to assert bootstrap import path is idempotent
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - ec2_instance_vars.yml
+
+  tasks:
+    - name: ADO | Promote vars for second create import
+      ansible.builtin.include_tasks: "{{ ec2_instance_molecule_promote_tasks }}"
+
+- ansible.builtin.import_playbook: infra.ado.aws.ec2.ado_ec2_instance_create
+
+- name: Promote info vars and capture instance id
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - ec2_instance_vars.yml
+
+  tasks:
+    - name: Set info inputs
+      ansible.builtin.set_fact:
+        ec2_instance_name: "{{ ec2_instance_molecule_name }}"
+        ec2_instance_region: "{{ ec2_instance_molecule_region }}"
+        ec2_instance_ids: []
+        ec2_instance_filters:
+          instance-state-name:
+            - pending
+            - running
+            - stopping
+            - stopped
+
+    - name: ADO | Promote vars for imported info playbook
+      ansible.builtin.include_tasks: "{{ ec2_instance_molecule_promote_tasks }}"
+
+- ansible.builtin.import_playbook: infra.ado.aws.ec2.ado_ec2_instance_info
+
+- name: Resolve instance id and promote modify vars
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - ec2_instance_vars.yml
+
+  tasks:
+    - name: Look up created instance by Name tag
+      amazon.aws.ec2_instance_info:
+        region: "{{ ec2_instance_molecule_region }}"
+        filters:
+          "tag:Name": "{{ ec2_instance_molecule_name }}"
+          instance-state-name: ["pending", "running", "stopping", "stopped"]
+      register: ec2_instance_molecule_lookup
+
+    - name: Assert create left exactly one matching instance
+      ansible.builtin.assert:
+        that:
+          - ec2_instance_molecule_lookup.instances | length == 1
+        fail_msg: >-
+          Expected 1 instance named {{ ec2_instance_molecule_name }},
+          found {{ ec2_instance_molecule_lookup.instances | length }}.
+          Create may not be idempotent against fakecloud filters.
+
+    - name: Persist instance id for verify/destroy
+      ansible.builtin.copy:
+        content: "{{ ec2_instance_molecule_lookup.instances[0].instance_id }}"
+        dest: "{{ ec2_instance_molecule_instance_id_file }}"
+        mode: "0600"
+      changed_when: false
+
+    - name: Set modify inputs (tag update)
+      ansible.builtin.set_fact:
+        ec2_instance_ids:
+          - "{{ ec2_instance_molecule_lookup.instances[0].instance_id }}"
+        ec2_instance_region: "{{ ec2_instance_molecule_region }}"
+        ec2_instance_wait: true
+        ec2_instance_wait_timeout: 120
+        ec2_instance_state: ""
+        ec2_instance_type: ""
+        ec2_instance_tags:
+          Name: "{{ ec2_instance_molecule_name }}"
+          MoleculeScenario: integration_ec2_instance
+          MoleculePhase: modified
+
+    - name: ADO | Promote vars for imported modify playbook
+      ansible.builtin.include_tasks: "{{ ec2_instance_molecule_promote_tasks }}"
+
+- ansible.builtin.import_playbook: infra.ado.aws.ec2.ado_ec2_instance_modify
+# yamllint enable rule:line-length

@@ -1,6 +1,6 @@
 ---
 # yamllint disable rule:line-length
-# FQCN: infra.ado.aws.ec2.ado-ec2-instance-create
+# FQCN: infra.ado.aws.ec2.ado_ec2_instance_create
 # Create / ensure an EC2 instance exists (amazon.aws.ec2_instance).
 # Examples adapted from:
 # https://docs.ansible.com/ansible/latest/collections/amazon/aws/ec2_instance_module.html
@@ -19,17 +19,11 @@
 #     useful for fakecloud where subnet-id placement may not stick)
 # Auth (any one path): AWS env vars, aws_profile, or vault_aws_* keys
 
+# Note: do not put empty-dict/list defaults in play vars — they override
+# host facts promoted by bootstrap seeds before import_playbook.
 - name: ADO | Create EC2 instance
   hosts: localhost
   gather_facts: false
-  vars:
-    ec2_instance_wait: true
-    ec2_instance_wait_timeout: 600
-    ec2_instance_assign_public_ip: false
-    ec2_instance_tags: {}
-    ec2_instance_security_groups: []
-    ec2_instance_volumes: []
-    ec2_instance_filters: {}
   tasks:
     - name: Assert required vars for create
       ansible.builtin.assert:
@@ -91,8 +85,8 @@
             else omit
           }}
         state: present
-        wait: "{{ ec2_instance_wait | bool }}"
-        wait_timeout: "{{ ec2_instance_wait_timeout | int }}"
+        wait: "{{ ec2_instance_wait | default(true) | bool }}"
+        wait_timeout: "{{ ec2_instance_wait_timeout | default(600) | int }}"
         region: >-
           {{
             ec2_instance_region

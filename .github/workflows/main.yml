@@ -111,6 +111,12 @@ on:
         required: false
         default: false
         type: boolean
+      run_integration_ec2_instance:
+        description: >-
+          Run integration_ec2_instance (fakecloud create/info/modify/delete)
+        required: false
+        default: false
+        type: boolean
       run_ocp_scenarios:
         description: "Run all ocp_* Molecule scenarios (requires OpenShift cluster secrets)"
         required: false
@@ -380,6 +386,7 @@ jobs:
               [integration_satellite_content_view_promote]="${{ github.event.inputs.run_integration_satellite_content_view_promote }}"
               [integration_ec2_ami_copy]="${{ github.event.inputs.run_integration_ec2_ami_copy }}"
               [integration_ec2_ami_copy_keep_name]="${{ github.event.inputs.run_integration_ec2_ami_copy_keep_name }}"
+              [integration_ec2_instance]="${{ github.event.inputs.run_integration_ec2_instance }}"
             )
             for scenario in "${!checks[@]}"; do
               if [[ "${checks[$scenario]}" == "true" ]]; then
