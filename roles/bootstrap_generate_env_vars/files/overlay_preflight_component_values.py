@@ -1294,8 +1294,11 @@ def merge_component(component, cfg):
                         elif not dashboards_path:
                             continue
                         requested = str(extra.get("folder") or "").strip()
-                        target = requested if requested in named_folders else pick_grafana_folder([
-                                                                                                  ])
+                        target = (
+                            requested
+                            if requested in named_folders
+                            else pick_grafana_folder([])
+                        )
                         cleaned_folders.append(
                             {
                                 "name": target,
