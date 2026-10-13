@@ -43,4 +43,13 @@ controller_templates:
           type: text
           variable: ec2_instance_name
           default: ""
+        - question_name: ADO | Wait for termination?
+          question_description: amazon.aws.ec2_instance wait
+          required: true
+          type: multiplechoice
+          variable: ec2_instance_wait
+          choices:
+            - "true"
+            - "false"
+          default: "true"
 # yamllint enable rule:line-length

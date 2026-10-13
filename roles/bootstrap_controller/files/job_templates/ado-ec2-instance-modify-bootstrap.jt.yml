@@ -39,15 +39,68 @@ controller_templates:
           default: ""
         - question_name: ADO | Desired state (optional)
           question_description: >-
-            present, running, started, stopped, restarted, rebooted, or leave blank
-          required: false
-          type: text
+            amazon.aws.ec2_instance state choices. Use (no change) to skip.
+            Terminate via the Delete EC2 instance job template.
+          required: true
+          type: multiplechoice
           variable: ec2_instance_state
-          default: ""
+          choices:
+            - "(no change)"
+            - present
+            - running
+            - started
+            - stopped
+            - restarted
+            - rebooted
+          default: "(no change)"
         - question_name: ADO | Instance type (optional)
-          question_description: New instance type (instance must be stopped for many changes)
-          required: false
-          type: text
+          question_description: >-
+            amazon.aws.ec2_instance instance_type (instance often must be stopped first)
+          required: true
+          type: multiplechoice
           variable: ec2_instance_type
-          default: ""
+          choices:
+            - "(no change)"
+            - t3.micro
+            - t3.small
+            - t3.medium
+            - t3.large
+            - t3.xlarge
+            - t3a.micro
+            - t3a.small
+            - t3a.medium
+            - t3a.large
+            - t2.micro
+            - t2.small
+            - t2.medium
+            - t2.large
+            - m5.large
+            - m5.xlarge
+            - m6i.large
+            - m6i.xlarge
+            - c5.large
+            - c5.xlarge
+            - c6i.large
+            - r5.large
+            - r6i.large
+          default: "(no change)"
+        - question_name: ADO | Termination protection (optional)
+          question_description: amazon.aws.ec2_instance termination_protection
+          required: true
+          type: multiplechoice
+          variable: ec2_instance_termination_protection
+          choices:
+            - "(no change)"
+            - "true"
+            - "false"
+          default: "(no change)"
+        - question_name: ADO | Wait for state change?
+          question_description: amazon.aws.ec2_instance wait
+          required: true
+          type: multiplechoice
+          variable: ec2_instance_wait
+          choices:
+            - "true"
+            - "false"
+          default: "true"
 # yamllint enable rule:line-length

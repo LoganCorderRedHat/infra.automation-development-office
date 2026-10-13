@@ -44,10 +44,35 @@ controller_templates:
           variable: ec2_instance_image_id
           default: ""
         - question_name: ADO | Instance type
-          question_description: EC2 instance type
+          question_description: >-
+            amazon.aws.ec2_instance instance_type. Curated common types
+            (module examples use t2/t3/c5); pass extra vars for other sizes.
           required: true
-          type: text
+          type: multiplechoice
           variable: ec2_instance_type
+          choices:
+            - t3.micro
+            - t3.small
+            - t3.medium
+            - t3.large
+            - t3.xlarge
+            - t3a.micro
+            - t3a.small
+            - t3a.medium
+            - t3a.large
+            - t2.micro
+            - t2.small
+            - t2.medium
+            - t2.large
+            - m5.large
+            - m5.xlarge
+            - m6i.large
+            - m6i.xlarge
+            - c5.large
+            - c5.xlarge
+            - c6i.large
+            - r5.large
+            - r6i.large
           default: t3.small
         - question_name: ADO | Subnet ID
           question_description: VPC subnet ID
@@ -68,10 +93,22 @@ controller_templates:
           variable: ec2_instance_security_group
           default: ""
         - question_name: ADO | Assign public IP?
-          question_description: Assign a public IP on the primary interface
+          question_description: >-
+            amazon.aws.ec2_instance network_interfaces.assign_public_ip
           required: true
           type: multiplechoice
           variable: ec2_instance_assign_public_ip
-          choices: "true\nfalse"
+          choices:
+            - "true"
+            - "false"
           default: "false"
+        - question_name: ADO | Wait for instance?
+          question_description: amazon.aws.ec2_instance wait
+          required: true
+          type: multiplechoice
+          variable: ec2_instance_wait
+          choices:
+            - "true"
+            - "false"
+          default: "true"
 # yamllint enable rule:line-length

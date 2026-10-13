@@ -2,11 +2,28 @@
 # yamllint disable rule:line-length
 # Promote bootstrap vars_files / resolve_component results to host facts so a
 # following import_playbook (collection FQCN) sees them on localhost.
+- name: ADO | Normalize Contoller (no change) survey sentinels
+  ansible.builtin.set_fact:
+    ado_ec2_instance_type_effective: >-
+      {{
+        ''
+        if (ec2_instance_type | default('') | string | trim) in ['', '(no change)']
+        else (ec2_instance_type | string | trim)
+      }}
+    ado_ec2_instance_state_effective: >-
+      {{
+        ''
+        if (ec2_instance_state | default('') | string | trim) in ['', '(no change)']
+        else (ec2_instance_state | string | trim)
+      }}
+    ado_ec2_instance_term_prot_raw: >-
+      {{ ec2_instance_termination_protection | default('(no change)') | string | trim }}
+
 - name: ADO | Promote EC2 instance and shared AWS vars to facts
   ansible.builtin.set_fact:
     ec2_instance_name: "{{ ec2_instance_name | default('') }}"
     ec2_instance_image_id: "{{ ec2_instance_image_id | default('') }}"
-    ec2_instance_type: "{{ ec2_instance_type | default('') }}"
+    ec2_instance_type: "{{ ado_ec2_instance_type_effective }}"
     ec2_instance_subnet_id: "{{ ec2_instance_subnet_id | default('') }}"
     ec2_instance_key_name: "{{ ec2_instance_key_name | default('') }}"
     ec2_instance_security_group: "{{ ec2_instance_security_group | default('') }}"
@@ -31,7 +48,7 @@
           else []
         )
       }}
-    ec2_instance_state: "{{ ec2_instance_state | default('') }}"
+    ec2_instance_state: "{{ ado_ec2_instance_state_effective }}"
     ec2_instance_filters: "{{ ec2_instance_filters | default({}) }}"
     ec2_instance_include_attributes: "{{ ec2_instance_include_attributes | default([]) }}"
     vault_aws_access_key_id: "{{ vault_aws_access_key_id | default('') }}"
@@ -45,10 +62,11 @@
     ec2_instance_purge_tags: "{{ ec2_instance_purge_tags }}"
   when: ec2_instance_purge_tags is defined
 
-- name: ADO | Promote termination protection fact when defined
+- name: ADO | Promote termination protection fact when selected
   ansible.builtin.set_fact:
-    ec2_instance_termination_protection: "{{ ec2_instance_termination_protection }}"
-  when: ec2_instance_termination_protection is defined
+    ec2_instance_termination_protection: >-
+      {{ ado_ec2_instance_term_prot_raw | bool }}
+  when: ado_ec2_instance_term_prot_raw | lower in ['true', 'false']
 
 - name: ADO | Promote minimum uptime fact when defined
   ansible.builtin.set_fact:
