@@ -1116,6 +1116,28 @@ def merge_component(component, cfg):
         ):
             passthrough_public_values.pop(ec2_key, None)
         existing_satellite_config = {}
+    elif component == "ec2_instance":
+        for ec2_key in (
+            "name",
+            "image_id",
+            "instance_type",
+            "subnet_id",
+            "key_name",
+            "security_group",
+            "security_groups",
+            "tags",
+            "assign_public_ip",
+            "volumes",
+            "region",
+            "wait",
+            "wait_timeout",
+            "instance_ids",
+            "state",
+            "filters",
+            "include_attributes",
+        ):
+            passthrough_public_values.pop(ec2_key, None)
+        existing_satellite_config = {}
     elif component == "aws":
         for aws_key in (
             "profile",
@@ -1142,7 +1164,7 @@ def merge_component(component, cfg):
             **existing_component_config,
             **copy.deepcopy(
                 public_values
-                if component in ("aws", "ec2_ami_copy")
+                if component in ("aws", "ec2_ami_copy", "ec2_instance")
                 else passthrough_public_values
             ),
         }
@@ -3589,6 +3611,65 @@ def merge_component(component, cfg):
                 vars_data["ec2_ami_copy_tags"] = public_values["tags"]
                 vars_data_changed = True
 
+        if component == "ec2_instance":
+            ec2_instance_mapping = {
+                "name": "ec2_instance_name",
+                "image_id": "ec2_instance_image_id",
+                "instance_type": "ec2_instance_type",
+                "subnet_id": "ec2_instance_subnet_id",
+                "key_name": "ec2_instance_key_name",
+                "security_group": "ec2_instance_security_group",
+                "region": "ec2_instance_region",
+                "state": "ec2_instance_state",
+            }
+            for source_key, target_key in ec2_instance_mapping.items():
+                if source_key in public_values:
+                    vars_data[target_key] = str(public_values.get(source_key) or "")
+                    vars_data_changed = True
+
+            for list_key, target_key in (
+                ("security_groups", "ec2_instance_security_groups"),
+                ("volumes", "ec2_instance_volumes"),
+                ("instance_ids", "ec2_instance_ids"),
+                ("include_attributes", "ec2_instance_include_attributes"),
+            ):
+                if list_key in public_values and isinstance(
+                    public_values.get(list_key), list
+                ):
+                    vars_data[target_key] = public_values[list_key]
+                    vars_data_changed = True
+
+            for dict_key, target_key in (
+                ("tags", "ec2_instance_tags"),
+                ("filters", "ec2_instance_filters"),
+            ):
+                if dict_key in public_values and isinstance(
+                    public_values.get(dict_key), dict
+                ):
+                    vars_data[target_key] = public_values[dict_key]
+                    vars_data_changed = True
+
+            if "assign_public_ip" in public_values:
+                vars_data["ec2_instance_assign_public_ip"] = as_bool(
+                    public_values.get("assign_public_ip"), False
+                )
+                vars_data_changed = True
+
+            if "wait" in public_values:
+                vars_data["ec2_instance_wait"] = as_bool(
+                    public_values.get("wait"), True
+                )
+                vars_data_changed = True
+
+            if "wait_timeout" in public_values:
+                try:
+                    vars_data["ec2_instance_wait_timeout"] = int(
+                        public_values.get("wait_timeout") or 600
+                    )
+                except (TypeError, ValueError):
+                    vars_data["ec2_instance_wait_timeout"] = 600
+                vars_data_changed = True
+
         if component == "ocp_virtualization":
             # Pin subscription vars into vars_ocp_virtualization.yml so a shared
             # Contoller/inventory operator_channel from ACM (release-2.x) cannot
@@ -4528,10 +4609,10 @@ def merge_component(component, cfg):
                 vault_data["vault_ad_trust_admin_password"] = secret_values["ad_admin_password"]
                 vault_data["idm_ad_trust_ad_admin_password"] = secret_values["ad_admin_password"]
 
-        if component in ("ec2_ami_copy", "aws", "cert_manager"):
+        if component in ("ec2_ami_copy", "ec2_instance", "aws", "cert_manager"):
             merge_shared_aws_vault({**public_values, **secret_values})
 
-        if component == "ec2_ami_copy":
+        if component in ("ec2_ami_copy", "ec2_instance"):
             if vault_path.exists():
                 vault_path.unlink()
         elif component != "aws":

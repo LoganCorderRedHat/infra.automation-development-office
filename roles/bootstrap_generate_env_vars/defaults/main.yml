@@ -28,6 +28,7 @@ generate_env_vars_components:  # noqa: var-naming[no-role-prefix]
   - mtv
   - openshift_virt
   - ec2_ami_copy
+  - ec2_instance
   - pega
   - quay
   - minio
@@ -281,6 +282,24 @@ bootstrap_generate_env_vars_ec2_ami_copy_kms_key_id: ""
 bootstrap_generate_env_vars_ec2_ami_copy_copy_image_tags: false
 bootstrap_generate_env_vars_ec2_ami_copy_tag_equality: false
 bootstrap_generate_env_vars_ec2_ami_copy_tags: {}
+
+bootstrap_generate_env_vars_ec2_instance_name: ""
+bootstrap_generate_env_vars_ec2_instance_image_id: ""
+bootstrap_generate_env_vars_ec2_instance_type: t3.small
+bootstrap_generate_env_vars_ec2_instance_subnet_id: ""
+bootstrap_generate_env_vars_ec2_instance_key_name: ""
+bootstrap_generate_env_vars_ec2_instance_security_group: ""
+bootstrap_generate_env_vars_ec2_instance_security_groups: []
+bootstrap_generate_env_vars_ec2_instance_tags: {}
+bootstrap_generate_env_vars_ec2_instance_assign_public_ip: false
+bootstrap_generate_env_vars_ec2_instance_volumes: []
+bootstrap_generate_env_vars_ec2_instance_region: ""
+bootstrap_generate_env_vars_ec2_instance_wait: true
+bootstrap_generate_env_vars_ec2_instance_wait_timeout: 600
+bootstrap_generate_env_vars_ec2_instance_ids: []
+bootstrap_generate_env_vars_ec2_instance_state: ""
+bootstrap_generate_env_vars_ec2_instance_filters: {}
+bootstrap_generate_env_vars_ec2_instance_include_attributes: []
 
 bootstrap_generate_env_vars_aws_profile: ""
 bootstrap_generate_env_vars_aws_default_region: us-east-1

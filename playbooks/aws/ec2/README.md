@@ -26,6 +26,20 @@ Or import from another playbook:
 - ansible.builtin.import_playbook: infra.ado.aws.ec2.ado-ec2-instance-create
 ```
 
+## Bootstrap (Contoller)
+
+When ``aws`` / ``ec2_instance`` is selected in preflight, bootstrap seeds:
+
+| Seed playbook | Imports |
+| --- | --- |
+| `ado-ec2-instance-create-bootstrap.yml` | `infra.ado.aws.ec2.ado-ec2-instance-create` |
+| `ado-ec2-instance-delete-bootstrap.yml` | `infra.ado.aws.ec2.ado-ec2-instance-delete` |
+| `ado-ec2-instance-modify-bootstrap.yml` | `infra.ado.aws.ec2.ado-ec2-instance-modify` |
+| `ado-ec2-instance-info-bootstrap.yml` | `infra.ado.aws.ec2.ado-ec2-instance-info` |
+
+Seeds load ``vault_aws.yml`` + ``vars_ec2_instance.yml`` for ``env``, resolve
+component defaults, then ``import_playbook`` the collection FQCN.
+
 ## Auth
 
 Use any one of:

@@ -1140,8 +1140,29 @@ components_defaults:
     ec2_ami_copy_tag_equality: false
     ec2_ami_copy_tags: {}
 
+  # EC2 instance lifecycle (collection playbooks infra.ado.aws.ec2.*).
+  ec2_instance:
+    component: ec2_instance
+    ec2_instance_name: ""
+    ec2_instance_image_id: ""
+    ec2_instance_type: t3.small
+    ec2_instance_subnet_id: ""
+    ec2_instance_key_name: ""
+    ec2_instance_security_group: ""
+    ec2_instance_security_groups: []
+    ec2_instance_tags: {}
+    ec2_instance_assign_public_ip: false
+    ec2_instance_volumes: []
+    ec2_instance_region: ""
+    ec2_instance_wait: true
+    ec2_instance_wait_timeout: 600
+    ec2_instance_ids: []
+    ec2_instance_state: ""
+    ec2_instance_filters: {}
+    ec2_instance_include_attributes: []
+
   # Shared AWS account credentials for bootstrap consumers (ec2_ami_copy,
-  # cert-manager AWS PCA, and future AWS modules).
+  # ec2_instance, cert-manager AWS PCA).
   aws:
     aws_profile: ""
     aws_default_region: us-east-1

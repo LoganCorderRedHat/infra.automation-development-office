@@ -1,0 +1,53 @@
+---
+# yamllint disable rule:line-length
+controller_templates:
+  - name: ADO | Modify EC2 instance
+    description: >-
+      Bootstrap - Modify an EC2 instance via
+      infra.ado.aws.ec2.ado-ec2-instance-modify
+    organization: '{{ bootstrap_controller_organization }}'
+    playbook: playbooks/aws/ec2/ado-ec2-instance-modify-bootstrap.yml
+    inventory: '{{ bootstrap_controller_inventory_name }}'
+    project: '{{ bootstrap_controller_project_name }}'
+    execution_environment: '{{ bootstrap_controller_execution_environment_name }}'
+    credentials:
+      - '{{ bootstrap_controller_creds }}'
+    related: null
+    labels:
+      - name: ADO | bootstrap
+        organization: '{{ bootstrap_controller_organization }}'
+      - name: ADO | aws
+        organization: '{{ bootstrap_controller_organization }}'
+    extra_vars: {}
+    survey_enabled: true
+    survey_spec:
+      name: ADO | Modify EC2 instance Survey
+      description: Stop/start/restart, change type, or update tags
+      spec:
+        - question_name: ADO | What environment?
+          question_description: Target environment (loads vault_aws / vars_ec2_instance)
+          required: true
+          type: multiplechoice
+          variable: env
+          choices: '{{ bootstrap_controller_environment_choices }}'
+          default: '{{ bootstrap_controller_default_environment }}'
+        - question_name: ADO | Instance ID
+          question_description: EC2 instance ID (for example i-0123456789abcdef0)
+          required: true
+          type: text
+          variable: ec2_instance_ids
+          default: ""
+        - question_name: ADO | Desired state (optional)
+          question_description: >-
+            present, running, started, stopped, restarted, rebooted, or leave blank
+          required: false
+          type: text
+          variable: ec2_instance_state
+          default: ""
+        - question_name: ADO | Instance type (optional)
+          question_description: New instance type (instance must be stopped for many changes)
+          required: false
+          type: text
+          variable: ec2_instance_type
+          default: ""
+# yamllint enable rule:line-length

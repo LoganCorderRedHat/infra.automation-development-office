@@ -349,6 +349,26 @@ ec2_ami_copy_copy_image_tags: {{ ec2_ami_copy_config.copy_image_tags | default(b
 ec2_ami_copy_tag_equality: {{ ec2_ami_copy_config.tag_equality | default(bootstrap_generate_env_vars_ec2_ami_copy_tag_equality | default(false), true) | bool | lower }}
 ec2_ami_copy_tags: {{ ec2_ami_copy_config.tags | default(bootstrap_generate_env_vars_ec2_ami_copy_tags | default({}), true) | to_json }}
 
+{% elif component_name == 'ec2_instance' %}
+{% set ec2_instance_config = bootstrap_generate_env_vars_preflight.component_config.ec2_instance | default({}) if bootstrap_generate_env_vars_preflight is defined else {} %}
+ec2_instance_name: {{ ec2_instance_config.name | default(bootstrap_generate_env_vars_ec2_instance_name | default('', true), true) | to_json }}
+ec2_instance_image_id: {{ ec2_instance_config.image_id | default(bootstrap_generate_env_vars_ec2_instance_image_id | default('', true), true) | to_json }}
+ec2_instance_type: {{ ec2_instance_config.instance_type | default(bootstrap_generate_env_vars_ec2_instance_type | default('t3.small', true), true) | to_json }}
+ec2_instance_subnet_id: {{ ec2_instance_config.subnet_id | default(bootstrap_generate_env_vars_ec2_instance_subnet_id | default('', true), true) | to_json }}
+ec2_instance_key_name: {{ ec2_instance_config.key_name | default(bootstrap_generate_env_vars_ec2_instance_key_name | default('', true), true) | to_json }}
+ec2_instance_security_group: {{ ec2_instance_config.security_group | default(bootstrap_generate_env_vars_ec2_instance_security_group | default('', true), true) | to_json }}
+ec2_instance_security_groups: {{ ec2_instance_config.security_groups | default(bootstrap_generate_env_vars_ec2_instance_security_groups | default([]), true) | to_json }}
+ec2_instance_tags: {{ ec2_instance_config.tags | default(bootstrap_generate_env_vars_ec2_instance_tags | default({}), true) | to_json }}
+ec2_instance_assign_public_ip: {{ ec2_instance_config.assign_public_ip | default(bootstrap_generate_env_vars_ec2_instance_assign_public_ip | default(false), true) | bool | lower }}
+ec2_instance_volumes: {{ ec2_instance_config.volumes | default(bootstrap_generate_env_vars_ec2_instance_volumes | default([]), true) | to_json }}
+ec2_instance_region: {{ ec2_instance_config.region | default(bootstrap_generate_env_vars_ec2_instance_region | default('', true), true) | to_json }}
+ec2_instance_wait: {{ ec2_instance_config.wait | default(bootstrap_generate_env_vars_ec2_instance_wait | default(true), true) | bool | lower }}
+ec2_instance_wait_timeout: {{ ec2_instance_config.wait_timeout | default(bootstrap_generate_env_vars_ec2_instance_wait_timeout | default(600, true), true) | int }}
+ec2_instance_ids: {{ ec2_instance_config.instance_ids | default(bootstrap_generate_env_vars_ec2_instance_ids | default([]), true) | to_json }}
+ec2_instance_state: {{ ec2_instance_config.state | default(bootstrap_generate_env_vars_ec2_instance_state | default('', true), true) | to_json }}
+ec2_instance_filters: {{ ec2_instance_config.filters | default(bootstrap_generate_env_vars_ec2_instance_filters | default({}), true) | to_json }}
+ec2_instance_include_attributes: {{ ec2_instance_config.include_attributes | default(bootstrap_generate_env_vars_ec2_instance_include_attributes | default([]), true) | to_json }}
+
 {% elif component_name == 'aws' %}
 {% set aws_config = bootstrap_generate_env_vars_preflight.component_config.aws | default({}) if bootstrap_generate_env_vars_preflight is defined else {} %}
 aws_profile: {{ aws_config.profile | default(bootstrap_generate_env_vars_aws_profile | default('', true), true) | to_json }}
