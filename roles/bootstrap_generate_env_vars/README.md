@@ -201,6 +201,7 @@ under `group_vars/all/<env>/`:
 | `vars_aws.yml` | `aws_profile`, `aws_default_region` |
 
 Consumers include ``infra.ado.ec2_ami_copy`` (``ado-copy-ami-bootstrap``),
+EC2 instance bootstrap playbooks under ``playbooks/aws/ec2/``,
 cert-manager AWS PCA (``ado-install-and-configure-awspca-bootstrap``), and
 future AWS bootstrap apps. Set credentials in preflight
 ``component_config.aws`` (or legacy per-component keys that overlay into

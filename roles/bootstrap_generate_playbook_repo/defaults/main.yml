@@ -215,9 +215,17 @@ bootstrap_generate_playbook_repo_component_map:
   ec2_ami_copy:
     - ec2_ami_copy
 
-  # AWS platform umbrella. Add future apps (ec2_instance, etc.) here.
+  ec2_instance:
+    - ec2_instance
+
+  s3_bucket_policy:
+    - s3_bucket_policy
+
+  # AWS platform umbrella (AMI copy + EC2 instance + S3 bucket policy).
   aws:
     - ec2_ami_copy
+    - ec2_instance
+    - s3_bucket_policy
 
 bootstrap_generate_playbook_repo_generated_playbooks:
 
@@ -256,6 +264,67 @@ bootstrap_generate_playbook_repo_generated_playbooks:
     target_platform: aws
     category: aws
     app: ec2_ami_copy
+
+  - src: aws/ec2/ado-ec2-instance-create-bootstrap.yml
+    dest: playbooks/aws/ec2/ado-ec2-instance-create-bootstrap.yml
+    target_platform: aws
+    category: aws
+    app: ec2_instance
+
+  - src: aws/ec2/ado-ec2-instance-delete-bootstrap.yml
+    dest: playbooks/aws/ec2/ado-ec2-instance-delete-bootstrap.yml
+    target_platform: aws
+    category: aws
+    app: ec2_instance
+
+  - src: aws/ec2/ado-ec2-instance-modify-bootstrap.yml
+    dest: playbooks/aws/ec2/ado-ec2-instance-modify-bootstrap.yml
+    target_platform: aws
+    category: aws
+    app: ec2_instance
+
+  - src: aws/ec2/ado-ec2-instance-info-bootstrap.yml
+    dest: playbooks/aws/ec2/ado-ec2-instance-info-bootstrap.yml
+    target_platform: aws
+    category: aws
+    app: ec2_instance
+
+  # Supporting tasks for EC2 bootstrap import_playbook wrappers.
+  - src: aws/ec2/tasks/promote-ec2-instance-facts.yml
+    dest: playbooks/aws/ec2/tasks/promote-ec2-instance-facts.yml
+    target_platform: aws
+    category: aws
+    app: ec2_instance
+
+  - src: aws/s3/ado-s3-bucket-policy-set-bootstrap.yml
+    dest: playbooks/aws/s3/ado-s3-bucket-policy-set-bootstrap.yml
+    target_platform: aws
+    category: aws
+    app: s3_bucket_policy
+
+  - src: aws/s3/ado-s3-bucket-policy-set-from-file-bootstrap.yml
+    dest: playbooks/aws/s3/ado-s3-bucket-policy-set-from-file-bootstrap.yml
+    target_platform: aws
+    category: aws
+    app: s3_bucket_policy
+
+  - src: aws/s3/ado-s3-bucket-policy-info-bootstrap.yml
+    dest: playbooks/aws/s3/ado-s3-bucket-policy-info-bootstrap.yml
+    target_platform: aws
+    category: aws
+    app: s3_bucket_policy
+
+  - src: aws/s3/tasks/promote-s3-bucket-policy-facts.yml
+    dest: playbooks/aws/s3/tasks/promote-s3-bucket-policy-facts.yml
+    target_platform: aws
+    category: aws
+    app: s3_bucket_policy
+
+  - src: aws/s3/policies/allow_list_and_read.json
+    dest: playbooks/aws/s3/policies/allow_list_and_read.json
+    target_platform: aws
+    category: aws
+    app: s3_bucket_policy
 
   - src: acm/ado-deploy-and-configure-bootstrap.yml
     dest: playbooks/acm/ado-deploy-and-configure-bootstrap.yml

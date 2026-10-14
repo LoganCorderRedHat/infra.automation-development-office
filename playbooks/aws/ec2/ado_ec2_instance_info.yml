@@ -1,0 +1,108 @@
+---
+# yamllint disable rule:line-length
+# FQCN: infra.ado.aws.ec2.ado_ec2_instance_info
+# Gather EC2 instance information (amazon.aws.ec2_instance_info).
+# Examples adapted from:
+# https://docs.ansible.com/ansible/latest/collections/amazon/aws/ec2_instance_info_module.html
+#
+# Optional filters (any combination):
+#   ec2_instance_ids: ["i-0123456789abcdef0"]
+#   ec2_instance_filters:
+#     "tag:Name": Example
+#     instance-state-name: ["running"]
+#     availability-zone: us-east-1a
+#   ec2_instance_name: Example          # convenience -> tag:Name filter
+#   ec2_instance_include_attributes: ["instanceType", "disableApiTermination"]
+#   ec2_instance_region, ec2_instance_minimum_uptime
+# Auth: AWS env vars, aws_profile, or vault_aws_* keys
+
+# Note: do not put empty-dict/list defaults in play vars — they override host
+# facts promoted by bootstrap seeds before import_playbook.
+- name: ADO | EC2 instance info
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Build DescribeInstances filters
+      ansible.builtin.set_fact:
+        ado_ec2_instance_info_filters: >-
+          {{
+            (ec2_instance_filters | default({}))
+            | combine(
+              {'tag:Name': ec2_instance_name}
+              if (ec2_instance_name | default('') | string | length) > 0
+              else {}
+            )
+          }}
+
+    - name: Gather EC2 instance information
+      amazon.aws.ec2_instance_info:
+        instance_ids: >-
+          {{
+            ec2_instance_ids
+            if (ec2_instance_ids | default([]) | length) > 0
+            else omit
+          }}
+        filters: >-
+          {{
+            ado_ec2_instance_info_filters
+            if (ado_ec2_instance_info_filters | length) > 0
+            else omit
+          }}
+        include_attributes: >-
+          {{
+            ec2_instance_include_attributes
+            if (ec2_instance_include_attributes | default([]) | length) > 0
+            else omit
+          }}
+        minimum_uptime: >-
+          {{
+            ec2_instance_minimum_uptime
+            if (ec2_instance_minimum_uptime is defined)
+            else omit
+          }}
+        region: >-
+          {{
+            ec2_instance_region
+            if (ec2_instance_region | default('') | string | length) > 0
+            else omit
+          }}
+        access_key: >-
+          {{
+            vault_aws_access_key_id
+            if (vault_aws_access_key_id | default('') | length) > 0
+            else omit
+          }}
+        secret_key: >-
+          {{
+            vault_aws_secret_access_key
+            if (vault_aws_secret_access_key | default('') | length) > 0
+            else omit
+          }}
+        session_token: >-
+          {{
+            vault_aws_session_token
+            if (vault_aws_session_token | default('') | length) > 0
+            else omit
+          }}
+        profile: >-
+          {{
+            aws_profile
+            if (aws_profile | default('') | string | length) > 0
+            else omit
+          }}
+      register: ado_ec2_instance_info
+
+    - name: Show instance summary
+      ansible.builtin.debug:
+        msg: >-
+          {{
+            ado_ec2_instance_info.instances
+            | default([])
+            | map(attribute='instance_id')
+            | list
+          }}
+
+    - name: Show full instance details
+      ansible.builtin.debug:
+        var: ado_ec2_instance_info.instances
+# yamllint enable rule:line-length

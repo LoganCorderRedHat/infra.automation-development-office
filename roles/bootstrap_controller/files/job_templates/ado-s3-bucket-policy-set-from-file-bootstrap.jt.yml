@@ -1,0 +1,60 @@
+---
+# yamllint disable rule:line-length
+controller_templates:
+  - name: ADO | Set S3 bucket policy from file
+    description: >-
+      Bootstrap - Create bucket and set policy from JSON via
+      infra.ado.aws.s3.ado_s3_bucket_policy_set_from_file
+    organization: '{{ bootstrap_controller_organization }}'
+    playbook: playbooks/aws/s3/ado-s3-bucket-policy-set-from-file-bootstrap.yml
+    inventory: '{{ bootstrap_controller_inventory_name }}'
+    project: '{{ bootstrap_controller_project_name }}'
+    execution_environment: '{{ bootstrap_controller_execution_environment_name }}'
+    credentials:
+      - '{{ bootstrap_controller_creds }}'
+    related: null
+    labels:
+      - name: ADO | bootstrap
+        organization: '{{ bootstrap_controller_organization }}'
+      - name: ADO | aws
+        organization: '{{ bootstrap_controller_organization }}'
+    extra_vars: {}
+    survey_enabled: true
+    survey_spec:
+      name: ADO | Set S3 bucket policy from file Survey
+      description: File-based S3 bucket policy options
+      spec:
+        - question_name: ADO | What environment?
+          question_description: Target environment (loads vault_aws / vars_s3_bucket_policy)
+          required: true
+          type: multiplechoice
+          variable: env
+          choices: '{{ bootstrap_controller_environment_choices }}'
+          default: '{{ bootstrap_controller_default_environment }}'
+        - question_name: ADO | Bucket name
+          question_description: Exact S3 bucket name (must appear in policy Resources)
+          required: true
+          type: text
+          variable: s3_bucket_name
+          default: ""
+        - question_name: ADO | Policy file path (optional)
+          question_description: >-
+            Path relative to the project or absolute. Default is the seeded
+            playbooks/aws/s3/policies/allow_list_and_read.json
+          required: false
+          type: text
+          variable: s3_bucket_policy_file
+          default: ""
+        - question_name: ADO | AWS account ID
+          question_description: Used when the policy file contains Jinja account placeholders
+          required: true
+          type: text
+          variable: s3_bucket_aws_account_id
+          default: "123456789012"
+        - question_name: ADO | Reader role name
+          question_description: Used when the policy file contains Jinja role placeholders
+          required: true
+          type: text
+          variable: s3_bucket_reader_role_name
+          default: AppReader
+# yamllint enable rule:line-length

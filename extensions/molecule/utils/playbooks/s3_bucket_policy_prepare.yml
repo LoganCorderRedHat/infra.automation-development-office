@@ -1,0 +1,24 @@
+---
+# yamllint disable rule:line-length
+- name: Prepare - s3_bucket_policy fakecloud scenario
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - s3_bucket_policy_vars.yml
+
+  tasks:
+    - name: Ensure artifact directory exists
+      ansible.builtin.file:
+        path: "{{ s3_bucket_policy_molecule_artifact_root }}"
+        state: directory
+        mode: "0700"
+
+    - name: Persist planned bucket name for converge/verify/destroy
+      ansible.builtin.copy:
+        content: "{{ s3_bucket_policy_molecule_name }}"
+        dest: "{{ s3_bucket_policy_molecule_bucket_file }}"
+        mode: "0600"
+      changed_when: false
+# yamllint enable rule:line-length

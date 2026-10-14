@@ -1,0 +1,75 @@
+---
+# yamllint disable rule:line-length
+# Promote bootstrap vars_files / resolve_component results to host facts so a
+# following import_playbook (collection FQCN) sees them on localhost.
+- name: ADO | Normalize Contoller (no change) survey sentinels
+  ansible.builtin.set_fact:
+    ado_ec2_instance_type_effective: >-
+      {{
+        ''
+        if (ec2_instance_type | default('') | string | trim) in ['', '(no change)']
+        else (ec2_instance_type | string | trim)
+      }}
+    ado_ec2_instance_state_effective: >-
+      {{
+        ''
+        if (ec2_instance_state | default('') | string | trim) in ['', '(no change)']
+        else (ec2_instance_state | string | trim)
+      }}
+    ado_ec2_instance_term_prot_raw: >-
+      {{ ec2_instance_termination_protection | default('(no change)') | string | trim }}
+
+- name: ADO | Promote EC2 instance and shared AWS vars to facts
+  ansible.builtin.set_fact:
+    ec2_instance_name: "{{ ec2_instance_name | default('') }}"
+    ec2_instance_image_id: "{{ ec2_instance_image_id | default('') }}"
+    ec2_instance_type: "{{ ado_ec2_instance_type_effective }}"
+    ec2_instance_subnet_id: "{{ ec2_instance_subnet_id | default('') }}"
+    ec2_instance_key_name: "{{ ec2_instance_key_name | default('') }}"
+    ec2_instance_security_group: "{{ ec2_instance_security_group | default('') }}"
+    ec2_instance_security_groups: "{{ ec2_instance_security_groups | default([]) }}"
+    ec2_instance_tags: "{{ ec2_instance_tags | default({}) }}"
+    ec2_instance_assign_public_ip: "{{ ec2_instance_assign_public_ip | default(false) | bool }}"
+    ec2_instance_volumes: "{{ ec2_instance_volumes | default([]) }}"
+    ec2_instance_region: "{{ ec2_instance_region | default(aws_default_region | default('')) }}"
+    ec2_instance_wait: "{{ ec2_instance_wait | default(true) | bool }}"
+    ec2_instance_wait_timeout: "{{ ec2_instance_wait_timeout | default(600) | int }}"
+    ec2_instance_ids: >-
+      {{
+        ec2_instance_ids
+        if (
+          ec2_instance_ids is defined
+          and ec2_instance_ids is sequence
+          and ec2_instance_ids is not string
+        )
+        else (
+          [ec2_instance_ids]
+          if (ec2_instance_ids | default('') | string | length) > 0
+          else []
+        )
+      }}
+    ec2_instance_state: "{{ ado_ec2_instance_state_effective }}"
+    ec2_instance_filters: "{{ ec2_instance_filters | default({}) }}"
+    ec2_instance_include_attributes: "{{ ec2_instance_include_attributes | default([]) }}"
+    vault_aws_access_key_id: "{{ vault_aws_access_key_id | default('') }}"
+    vault_aws_secret_access_key: "{{ vault_aws_secret_access_key | default('') }}"
+    vault_aws_session_token: "{{ vault_aws_session_token | default('') }}"
+    aws_profile: "{{ aws_profile | default('') }}"
+    aws_default_region: "{{ aws_default_region | default('') }}"
+
+- name: ADO | Promote optional EC2 modify/info facts when defined
+  ansible.builtin.set_fact:
+    ec2_instance_purge_tags: "{{ ec2_instance_purge_tags }}"
+  when: ec2_instance_purge_tags is defined
+
+- name: ADO | Promote termination protection fact when selected
+  ansible.builtin.set_fact:
+    ec2_instance_termination_protection: >-
+      {{ ado_ec2_instance_term_prot_raw | bool }}
+  when: ado_ec2_instance_term_prot_raw | lower in ['true', 'false']
+
+- name: ADO | Promote minimum uptime fact when defined
+  ansible.builtin.set_fact:
+    ec2_instance_minimum_uptime: "{{ ec2_instance_minimum_uptime }}"
+  when: ec2_instance_minimum_uptime is defined
+# yamllint enable rule:line-length

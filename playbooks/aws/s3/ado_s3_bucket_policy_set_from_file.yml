@@ -1,0 +1,120 @@
+---
+# yamllint disable rule:line-length
+# FQCN: infra.ado.aws.s3.ado_s3_bucket_policy_set_from_file
+# Create an S3 bucket if needed and set its policy from a JSON/Jinja file.
+#
+# Required:
+#   s3_bucket_name
+# Optional:
+#   s3_bucket_policy_file — defaults to collection sample
+#     playbooks/aws/s3/policies/allow_list_and_read.json
+#   s3_bucket_aws_account_id, s3_bucket_reader_role_name (for Jinja in file)
+#   s3_bucket_region, s3_bucket_endpoint_url, aws_profile, vault_aws_*
+
+- name: ADO | Set S3 bucket policy (from file)
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Assert required vars for S3 bucket policy from file
+      ansible.builtin.assert:
+        that:
+          - (s3_bucket_name | default('') | string | length) > 0
+        fail_msg: Set s3_bucket_name.
+
+    - name: Resolve region, endpoint, and policy file path
+      ansible.builtin.set_fact:
+        ado_s3_bucket_region: >-
+          {{
+            s3_bucket_region
+            | default(aws_default_region | default('us-east-1', true), true)
+          }}
+        ado_s3_bucket_endpoint: >-
+          {{
+            s3_bucket_endpoint_url
+            | default(lookup('env', 'AWS_ENDPOINT_URL') | default('', true), true)
+          }}
+        ado_s3_bucket_policy_path: >-
+          {{
+            s3_bucket_policy_file
+            | default(playbook_dir ~ '/policies/allow_list_and_read.json', true)
+          }}
+        s3_bucket_aws_account_id: >-
+          {{ s3_bucket_aws_account_id | default('123456789012', true) | string }}
+        s3_bucket_reader_role_name: >-
+          {{ s3_bucket_reader_role_name | default('AppReader', true) | string }}
+
+    - name: Load and render the bucket policy document
+      ansible.builtin.set_fact:
+        ado_s3_bucket_policy_document: >-
+          {{
+            lookup('ansible.builtin.template', ado_s3_bucket_policy_path)
+            | from_json
+          }}
+
+    - name: Require every Resource to name this bucket
+      ansible.builtin.assert:
+        that:
+          - item is search(s3_bucket_name)
+        fail_msg: >-
+          {{ ado_s3_bucket_policy_path }} has a Resource that does not name
+          {{ s3_bucket_name }}. Edit the JSON or pass a matching s3_bucket_name.
+      loop: >-
+        {{
+          ado_s3_bucket_policy_document.Statement
+          | map(attribute='Resource')
+          | flatten
+        }}
+
+    - name: Create the bucket and apply the policy file
+      amazon.aws.s3_bucket:
+        name: "{{ s3_bucket_name }}"
+        state: present
+        region: "{{ ado_s3_bucket_region }}"
+        policy: "{{ ado_s3_bucket_policy_document }}"
+        profile: >-
+          {{
+            aws_profile
+            if (aws_profile | default('') | string | length) > 0
+            else omit
+          }}
+        endpoint_url: >-
+          {{
+            ado_s3_bucket_endpoint
+            if (ado_s3_bucket_endpoint | length) > 0
+            else omit
+          }}
+        aws_config: >-
+          {{
+            {'s3': {'addressing_style': 'path'}}
+            if (ado_s3_bucket_endpoint | length) > 0
+            else omit
+          }}
+        access_key: >-
+          {{
+            vault_aws_access_key_id
+            if (vault_aws_access_key_id | default('') | length) > 0
+            else omit
+          }}
+        secret_key: >-
+          {{
+            vault_aws_secret_access_key
+            if (vault_aws_secret_access_key | default('') | length) > 0
+            else omit
+          }}
+        session_token: >-
+          {{
+            vault_aws_session_token
+            if (vault_aws_session_token | default('') | length) > 0
+            else omit
+          }}
+      register: ado_s3_bucket_policy_set_from_file
+
+    - name: Show applied S3 bucket policy from file
+      ansible.builtin.debug:
+        msg:
+          bucket: "{{ s3_bucket_name }}"
+          region: "{{ ado_s3_bucket_region }}"
+          policy_file: "{{ ado_s3_bucket_policy_path }}"
+          changed: "{{ ado_s3_bucket_policy_set_from_file.changed }}"
+          policy: "{{ ado_s3_bucket_policy_set_from_file.policy | default({}) }}"
+# yamllint enable rule:line-length

@@ -1,0 +1,29 @@
+---
+# yamllint disable rule:line-length
+# Destroy removes the molecule bucket from fakecloud (not a collection playbook).
+- name: Destroy - remove s3_bucket_policy scenario resources
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - s3_bucket_policy_vars.yml
+
+  tasks:
+    - name: Delete molecule S3 bucket when present
+      amazon.aws.s3_bucket:
+        name: "{{ s3_bucket_policy_molecule_name }}"
+        state: absent
+        region: "{{ s3_bucket_policy_molecule_region }}"
+        force: true
+        endpoint_url: "{{ lookup('env', 'AWS_ENDPOINT_URL') | default(omit, true) }}"
+        aws_config:
+          s3:
+            addressing_style: path
+      failed_when: false
+
+    - name: Remove scenario artifact directory
+      ansible.builtin.file:
+        path: "{{ s3_bucket_policy_molecule_artifact_root }}"
+        state: absent
+# yamllint enable rule:line-length

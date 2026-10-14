@@ -1,0 +1,131 @@
+---
+# yamllint disable rule:line-length
+# FQCN: infra.ado.aws.s3.ado_s3_bucket_policy_set
+# Create an S3 bucket if needed and set its resource policy (inline document).
+# Based on amazon.aws.s3_bucket policy examples / aws-ansible-examples.
+#
+# Required:
+#   s3_bucket_name
+# Optional:
+#   s3_bucket_policy (mapping) — full policy document; when omitted a default
+#     AllowRoleRead + DenyInsecureTransport document is built from
+#     s3_bucket_aws_account_id / s3_bucket_reader_role_name
+#   s3_bucket_region, s3_bucket_endpoint_url, aws_profile, vault_aws_*
+
+- name: ADO | Set S3 bucket policy (inline)
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Assert required vars for S3 bucket policy set
+      ansible.builtin.assert:
+        that:
+          - (s3_bucket_name | default('') | string | length) > 0
+        fail_msg: Set s3_bucket_name.
+
+    - name: Resolve region and endpoint for S3
+      ansible.builtin.set_fact:
+        ado_s3_bucket_region: >-
+          {{
+            s3_bucket_region
+            | default(aws_default_region | default('us-east-1', true), true)
+          }}
+        ado_s3_bucket_endpoint: >-
+          {{
+            s3_bucket_endpoint_url
+            | default(lookup('env', 'AWS_ENDPOINT_URL') | default('', true), true)
+          }}
+        ado_s3_bucket_account_id: >-
+          {{ s3_bucket_aws_account_id | default('123456789012', true) | string }}
+        ado_s3_bucket_reader_role: >-
+          {{ s3_bucket_reader_role_name | default('AppReader', true) | string }}
+
+    - name: Build default inline bucket policy when not provided
+      ansible.builtin.set_fact:
+        ado_s3_bucket_policy_document:
+          Version: "2012-10-17"
+          Statement:
+            - Sid: DenyInsecureTransport
+              Effect: Deny
+              Principal: "*"
+              Action: "s3:*"
+              Resource:
+                - "arn:aws:s3:::{{ s3_bucket_name }}"
+                - "arn:aws:s3:::{{ s3_bucket_name }}/*"
+              Condition:
+                Bool:
+                  aws:SecureTransport: "false"
+            - Sid: AllowRoleRead
+              Effect: Allow
+              Principal:
+                AWS: >-
+                  arn:aws:iam::{{ ado_s3_bucket_account_id }}:role/{{ ado_s3_bucket_reader_role }}
+              Action:
+                - s3:GetObject
+              Resource: "arn:aws:s3:::{{ s3_bucket_name }}/*"
+      when: >-
+        not (
+          s3_bucket_policy is defined
+          and s3_bucket_policy is mapping
+          and (s3_bucket_policy.Statement | default([]) | length) > 0
+        )
+
+    - name: Use provided inline bucket policy
+      ansible.builtin.set_fact:
+        ado_s3_bucket_policy_document: "{{ s3_bucket_policy }}"
+      when: >-
+        s3_bucket_policy is defined
+        and s3_bucket_policy is mapping
+        and (s3_bucket_policy.Statement | default([]) | length) > 0
+
+    - name: Create the bucket and apply the inline policy
+      amazon.aws.s3_bucket:
+        name: "{{ s3_bucket_name }}"
+        state: present
+        region: "{{ ado_s3_bucket_region }}"
+        policy: "{{ ado_s3_bucket_policy_document }}"
+        profile: >-
+          {{
+            aws_profile
+            if (aws_profile | default('') | string | length) > 0
+            else omit
+          }}
+        endpoint_url: >-
+          {{
+            ado_s3_bucket_endpoint
+            if (ado_s3_bucket_endpoint | length) > 0
+            else omit
+          }}
+        aws_config: >-
+          {{
+            {'s3': {'addressing_style': 'path'}}
+            if (ado_s3_bucket_endpoint | length) > 0
+            else omit
+          }}
+        access_key: >-
+          {{
+            vault_aws_access_key_id
+            if (vault_aws_access_key_id | default('') | length) > 0
+            else omit
+          }}
+        secret_key: >-
+          {{
+            vault_aws_secret_access_key
+            if (vault_aws_secret_access_key | default('') | length) > 0
+            else omit
+          }}
+        session_token: >-
+          {{
+            vault_aws_session_token
+            if (vault_aws_session_token | default('') | length) > 0
+            else omit
+          }}
+      register: ado_s3_bucket_policy_set
+
+    - name: Show applied S3 bucket policy
+      ansible.builtin.debug:
+        msg:
+          bucket: "{{ s3_bucket_name }}"
+          region: "{{ ado_s3_bucket_region }}"
+          changed: "{{ ado_s3_bucket_policy_set.changed }}"
+          policy: "{{ ado_s3_bucket_policy_set.policy | default({}) }}"
+# yamllint enable rule:line-length

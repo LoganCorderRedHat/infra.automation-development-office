@@ -1,17 +1,15 @@
 """Overlay preflight component_config into generated group_vars (invoked by Ansible)."""
 from __future__ import annotations
 
-import json
-import os
-from pathlib import Path
-
-from pathlib import Path
 import base64
 import binascii
 import copy
 import json
+import os
 import re
 import shutil
+from pathlib import Path
+
 import yaml
 
 
@@ -1116,6 +1114,39 @@ def merge_component(component, cfg):
         ):
             passthrough_public_values.pop(ec2_key, None)
         existing_satellite_config = {}
+    elif component == "ec2_instance":
+        for ec2_key in (
+            "name",
+            "image_id",
+            "instance_type",
+            "subnet_id",
+            "key_name",
+            "security_group",
+            "security_groups",
+            "tags",
+            "assign_public_ip",
+            "volumes",
+            "region",
+            "wait",
+            "wait_timeout",
+            "instance_ids",
+            "state",
+            "filters",
+            "include_attributes",
+        ):
+            passthrough_public_values.pop(ec2_key, None)
+        existing_satellite_config = {}
+    elif component == "s3_bucket_policy":
+        for s3_key in (
+            "name",
+            "region",
+            "aws_account_id",
+            "reader_role_name",
+            "policy_file",
+            "endpoint_url",
+        ):
+            passthrough_public_values.pop(s3_key, None)
+        existing_satellite_config = {}
     elif component == "aws":
         for aws_key in (
             "profile",
@@ -1142,7 +1173,8 @@ def merge_component(component, cfg):
             **existing_component_config,
             **copy.deepcopy(
                 public_values
-                if component in ("aws", "ec2_ami_copy")
+                if component
+                in ("aws", "ec2_ami_copy", "ec2_instance", "s3_bucket_policy")
                 else passthrough_public_values
             ),
         }
@@ -1177,7 +1209,9 @@ def merge_component(component, cfg):
                 ):
                     vars_data_changed = True
             if public_values.get("folder_name"):
-                vars_data["components_env"]["grafana"]["grafana_folder"] = public_values["folder_name"]
+                vars_data["components_env"]["grafana"]["grafana_folder"] = (
+                    public_values["folder_name"]
+                )
             if public_values.get("hostname"):
                 vars_data["components_env"]["grafana"]["hostname"] = public_values["hostname"]
             folders = public_values.get("folders")
@@ -1260,7 +1294,11 @@ def merge_component(component, cfg):
                         elif not dashboards_path:
                             continue
                         requested = str(extra.get("folder") or "").strip()
-                        target = requested if requested in named_folders else pick_grafana_folder([])
+                        target = (
+                            requested
+                            if requested in named_folders
+                            else pick_grafana_folder([])
+                        )
                         cleaned_folders.append(
                             {
                                 "name": target,
@@ -1275,7 +1313,8 @@ def merge_component(component, cfg):
                     include_builtin
                 )
                 vars_data["grafana_folders"] = cleaned_folders
-                vars_data["components_env"]["grafana"]["grafana_folders"] = copy.deepcopy(cleaned_folders)
+                vars_data["components_env"]["grafana"]["grafana_folders"] = copy.deepcopy(
+                    cleaned_folders)
             datasources = public_values.get("datasources")
             if isinstance(datasources, list):
                 normalized_ds = []
@@ -1408,8 +1447,11 @@ def merge_component(component, cfg):
                     )
                     vars_data_changed = True
             if "alerts_enabled" in public_values:
-                vars_data["grafana_alerts_enabled"] = as_bool(public_values.get("alerts_enabled"), False)
-                vars_data["components_env"]["grafana"]["grafana_alerts_enabled"] = vars_data["grafana_alerts_enabled"]
+                vars_data["grafana_alerts_enabled"] = as_bool(
+                    public_values.get("alerts_enabled"), False)
+                vars_data["components_env"]["grafana"][
+                    "grafana_alerts_enabled"
+                ] = vars_data["grafana_alerts_enabled"]
             elif "alerts" in grafana_opts_lower:
                 vars_data["grafana_alerts_enabled"] = True
                 vars_data["components_env"]["grafana"]["grafana_alerts_enabled"] = True
@@ -1444,7 +1486,8 @@ def merge_component(component, cfg):
                 db_type = "sqlite"
             vars_data["grafana_database_type"] = db_type
             vars_data["components_env"]["grafana"]["grafana_database_type"] = db_type
-            db_cfg = public_values.get("database") if isinstance(public_values.get("database"), dict) else {}
+            db_cfg = public_values.get("database") if isinstance(
+                public_values.get("database"), dict) else {}
             provision_raw = first_present(
                 public_values.get("database_provision"),
                 public_values.get("grafana_database_provision"),
@@ -1652,11 +1695,13 @@ def merge_component(component, cfg):
             if edition:
                 vars_data["gitlab_edition"] = str(edition)
                 vars_data["install_gitlab_edition"] = str(edition)
-            rpm_path = first_present(public_values.get("standalone_rpm_path")) if gitlab_standalone else None
+            rpm_path = first_present(public_values.get(
+                "standalone_rpm_path")) if gitlab_standalone else None
             if rpm_path:
                 vars_data["gitlab_rpm_path"] = str(rpm_path)
                 vars_data["install_gitlab_rpm_path"] = str(rpm_path)
-            rpm_url = first_present(public_values.get("standalone_rpm_url")) if gitlab_standalone else None
+            rpm_url = first_present(public_values.get("standalone_rpm_url")
+                                    ) if gitlab_standalone else None
             if rpm_url:
                 vars_data["gitlab_rpm_url"] = str(rpm_url)
                 vars_data["install_gitlab_rpm_url"] = str(rpm_url)
@@ -1728,7 +1773,8 @@ def merge_component(component, cfg):
                 vault_data["vault_gitlab_tls_key"] = QuotedString(str(tls_key))
                 vault_data["gitlab_tls_key"] = QuotedString(str(tls_key))
                 vault_data_changed = True
-            rhn_org = first_present(public_values.get("standalone_rhn_org_id")) if gitlab_standalone else None
+            rhn_org = first_present(public_values.get(
+                "standalone_rhn_org_id")) if gitlab_standalone else None
             if rhn_org:
                 vars_data["install_gitlab_rhn_org_id"] = str(rhn_org)
                 vars_data["gitlab_rhn_org_id"] = str(rhn_org)
@@ -1913,7 +1959,8 @@ def merge_component(component, cfg):
                         f"{zabbix_issuer}/protocol/saml/descriptor"
                     )
                     vars_data["zabbix_saml_sp_entity_id"] = (
-                        f"https://{strip_host(ocp_host or vars_data.get('zabbix_hostname') or 'zabbix')}/"
+                        "https://"
+                        f"{strip_host(ocp_host or vars_data.get('zabbix_hostname') or 'zabbix')}/"
                     )
                 if public_values.get("saml_enabled") is not None:
                     vars_data["zabbix_saml_enabled"] = as_bool(
@@ -1962,7 +2009,8 @@ def merge_component(component, cfg):
             rhbk_host = strip_host(
                 first_present(
                     rhbk_cfg.get("hostname"),
-                    ((preflight.get("openshift") or {}).get("apps_domain") and f"keycloak.{((preflight.get('openshift') or {}).get('apps_domain'))}"),
+                    ((preflight.get("openshift") or {}).get("apps_domain")
+                     and f"keycloak.{((preflight.get('openshift') or {}).get('apps_domain'))}"),
                 )
             )
             if rhbk_host:
@@ -1997,7 +2045,8 @@ def merge_component(component, cfg):
                 vars_data_changed = True
             oidc_secret = first_present(public_values.get("oidc_client_secret"))
             if oidc_secret:
-                vars_data["dev_hub_oidc_client_secret"] = vault_ref("vault_dev_hub_oidc_client_secret")
+                vars_data["dev_hub_oidc_client_secret"] = vault_ref(
+                    "vault_dev_hub_oidc_client_secret")
                 vault_data["vault_dev_hub_oidc_client_secret"] = QuotedString(str(oidc_secret))
                 vars_data_changed = True
             gitlab_token = first_present(
@@ -2296,15 +2345,18 @@ def merge_component(component, cfg):
                 vars_data["bookstack_oidc_client_id"] = str(public_values["oidc_client_id"])
                 vars_data_changed = True
             if public_values.get("oidc_enabled") is not None:
-                vars_data["bookstack_oidc_enabled"] = as_bool(public_values.get("oidc_enabled"), True)
+                vars_data["bookstack_oidc_enabled"] = as_bool(
+                    public_values.get("oidc_enabled"), True)
                 vars_data_changed = True
             bookstack_oidc_secret = first_present(
                 secret_values.get("oidc_client_secret"),
                 public_values.get("oidc_client_secret"),
             )
             if bookstack_oidc_secret:
-                vars_data["bookstack_oidc_client_secret"] = vault_ref("vault_bookstack_oidc_client_secret")
-                vault_data["vault_bookstack_oidc_client_secret"] = QuotedString(str(bookstack_oidc_secret))
+                vars_data["bookstack_oidc_client_secret"] = vault_ref(
+                    "vault_bookstack_oidc_client_secret")
+                vault_data["vault_bookstack_oidc_client_secret"] = QuotedString(
+                    str(bookstack_oidc_secret))
                 vault_data_changed = True
 
         if component == "netbox":
@@ -2342,8 +2394,10 @@ def merge_component(component, cfg):
                 public_values.get("oidc_client_secret"),
             )
             if netbox_oidc_secret:
-                vars_data["netbox_oidc_client_secret"] = vault_ref("vault_netbox_oidc_client_secret")
-                vault_data["vault_netbox_oidc_client_secret"] = QuotedString(str(netbox_oidc_secret))
+                vars_data["netbox_oidc_client_secret"] = vault_ref(
+                    "vault_netbox_oidc_client_secret")
+                vault_data["vault_netbox_oidc_client_secret"] = QuotedString(
+                    str(netbox_oidc_secret))
                 vault_data_changed = True
 
         if component == "rhbk":
@@ -2575,8 +2629,16 @@ def merge_component(component, cfg):
 
                     def _split(value):
                         if isinstance(value, list):
-                            return [str(v).strip() for v in value if str(v).strip()]
-                        return [part.strip() for part in str(value or "").replace("\n", ",").split(",") if part.strip()]
+                            return [
+                                str(v).strip() for v in value if str(v).strip()
+                            ]
+                        return [
+                            part.strip()
+                            for part in str(value or "")
+                            .replace("\n", ",")
+                            .split(",")
+                            if part.strip()
+                        ]
                     rhbk_clients[client_id] = {
                         "rhbk_client_name": str(client.get("name") or client_id),
                         "rhbk_redirect_uris": _split(client.get("redirect_uris")),
@@ -2586,7 +2648,8 @@ def merge_component(component, cfg):
                     }
                 if rhbk_clients:
                     vars_data["rhbk_clients"] = rhbk_clients
-                    vars_data["components_env"]["rhbk"]["rhbk_clients"] = copy.deepcopy(rhbk_clients)
+                    vars_data["components_env"]["rhbk"]["rhbk_clients"] = copy.deepcopy(
+                        rhbk_clients)
             if public_values.get("client"):
                 vars_data["rhbk_client"] = str(public_values.get("client"))
             _oidc_client = first_present(
@@ -2639,7 +2702,8 @@ def merge_component(component, cfg):
                 oidc_auth["issuer"] = f"https://{_issuer_host}/realms/{_realm}"
             if not rhbk_standalone_selected:
                 vars_data["openshift_oidc_auth"] = oidc_auth
-                vars_data["components_env"]["rhbk"]["openshift_oidc_auth"] = copy.deepcopy(oidc_auth)
+                vars_data["components_env"]["rhbk"]["openshift_oidc_auth"] = copy.deepcopy(
+                    oidc_auth)
                 vars_data_changed = True
             # Standalone ZIP / hostname / TLS only when option is selected.
             # Do not let UI default standalone_hostname force platform=rhel on OCP.
@@ -2750,12 +2814,14 @@ def merge_component(component, cfg):
                 )
                 tls_key = first_present(secret_values.get("standalone_tls_key"))
                 if tls_crt:
-                    vars_data["rhbk_standalone_tls_crt"] = vault_ref("vault_rhbk_standalone_tls_crt")
+                    vars_data["rhbk_standalone_tls_crt"] = vault_ref(
+                        "vault_rhbk_standalone_tls_crt")
                     vars_data["tls_crt"] = vault_ref("vault_rhbk_standalone_tls_crt")
                     vault_data["vault_rhbk_standalone_tls_crt"] = QuotedString(str(tls_crt))
                     vault_data_changed = True
                 if tls_key:
-                    vars_data["rhbk_standalone_tls_key"] = vault_ref("vault_rhbk_standalone_tls_key")
+                    vars_data["rhbk_standalone_tls_key"] = vault_ref(
+                        "vault_rhbk_standalone_tls_key")
                     vars_data["tls_key"] = vault_ref("vault_rhbk_standalone_tls_key")
                     vault_data["vault_rhbk_standalone_tls_key"] = QuotedString(str(tls_key))
                     vault_data_changed = True
@@ -3209,8 +3275,18 @@ def merge_component(component, cfg):
                 )
 
         if component == "acm":
-            for key in ("enabled", "name", "namespace", "target_namespace", "label_key",
-                        "label_value", "cluster_set", "selector_key", "selector_value", "remediation"):
+            for key in (
+                "enabled",
+                "name",
+                "namespace",
+                "target_namespace",
+                "label_key",
+                "label_value",
+                "cluster_set",
+                "selector_key",
+                "selector_value",
+                "remediation",
+            ):
                 source = "policy_" + key
                 if source in public_values:
                     vars_data["ocp_acm_policy_" + key] = public_values[source]
@@ -3306,9 +3382,11 @@ def merge_component(component, cfg):
                     public_values.get("customize_workspace"), False
                 )
             if public_values.get("default_devfile_url"):
-                vars_data["ocp_devspaces_default_devfile_url"] = public_values.get("default_devfile_url")
+                vars_data["ocp_devspaces_default_devfile_url"] = public_values.get(
+                    "default_devfile_url")
             if public_values.get("default_workspace_image"):
-                vars_data["ocp_devspaces_default_workspace_image"] = public_values.get("default_workspace_image")
+                vars_data["ocp_devspaces_default_workspace_image"] = public_values.get(
+                    "default_workspace_image")
             if public_values.get("dashboard_image"):
                 vars_data["ocp_devspaces_dashboard_image"] = public_values.get("dashboard_image")
 
@@ -3589,6 +3667,79 @@ def merge_component(component, cfg):
                 vars_data["ec2_ami_copy_tags"] = public_values["tags"]
                 vars_data_changed = True
 
+        if component == "ec2_instance":
+            ec2_instance_mapping = {
+                "name": "ec2_instance_name",
+                "image_id": "ec2_instance_image_id",
+                "instance_type": "ec2_instance_type",
+                "subnet_id": "ec2_instance_subnet_id",
+                "key_name": "ec2_instance_key_name",
+                "security_group": "ec2_instance_security_group",
+                "region": "ec2_instance_region",
+                "state": "ec2_instance_state",
+            }
+            for source_key, target_key in ec2_instance_mapping.items():
+                if source_key in public_values:
+                    vars_data[target_key] = str(public_values.get(source_key) or "")
+                    vars_data_changed = True
+
+            for list_key, target_key in (
+                ("security_groups", "ec2_instance_security_groups"),
+                ("volumes", "ec2_instance_volumes"),
+                ("instance_ids", "ec2_instance_ids"),
+                ("include_attributes", "ec2_instance_include_attributes"),
+            ):
+                if list_key in public_values and isinstance(
+                    public_values.get(list_key), list
+                ):
+                    vars_data[target_key] = public_values[list_key]
+                    vars_data_changed = True
+
+            for dict_key, target_key in (
+                ("tags", "ec2_instance_tags"),
+                ("filters", "ec2_instance_filters"),
+            ):
+                if dict_key in public_values and isinstance(
+                    public_values.get(dict_key), dict
+                ):
+                    vars_data[target_key] = public_values[dict_key]
+                    vars_data_changed = True
+
+            if "assign_public_ip" in public_values:
+                vars_data["ec2_instance_assign_public_ip"] = as_bool(
+                    public_values.get("assign_public_ip"), False
+                )
+                vars_data_changed = True
+
+            if "wait" in public_values:
+                vars_data["ec2_instance_wait"] = as_bool(
+                    public_values.get("wait"), True
+                )
+                vars_data_changed = True
+
+            if "wait_timeout" in public_values:
+                try:
+                    vars_data["ec2_instance_wait_timeout"] = int(
+                        public_values.get("wait_timeout") or 600
+                    )
+                except (TypeError, ValueError):
+                    vars_data["ec2_instance_wait_timeout"] = 600
+                vars_data_changed = True
+
+        if component == "s3_bucket_policy":
+            s3_bucket_policy_mapping = {
+                "name": "s3_bucket_name",
+                "region": "s3_bucket_region",
+                "aws_account_id": "s3_bucket_aws_account_id",
+                "reader_role_name": "s3_bucket_reader_role_name",
+                "policy_file": "s3_bucket_policy_file",
+                "endpoint_url": "s3_bucket_endpoint_url",
+            }
+            for source_key, target_key in s3_bucket_policy_mapping.items():
+                if source_key in public_values:
+                    vars_data[target_key] = str(public_values.get(source_key) or "")
+                    vars_data_changed = True
+
         if component == "ocp_virtualization":
             # Pin subscription vars into vars_ocp_virtualization.yml so a shared
             # Contoller/inventory operator_channel from ACM (release-2.x) cannot
@@ -3683,8 +3834,12 @@ def merge_component(component, cfg):
                 vars_data["rhel_sat_reg_validate_certs"] = public_values["validate_certs"]
                 vars_data["rhel_sat_reg_insecure"] = not bool(public_values["validate_certs"])
             if public_values.get("deployment_version"):
-                vars_data["satellite_config_satellite_deployment_version"] = public_values["deployment_version"]
-                vars_data["satellite_install_deployment_version"] = public_values["deployment_version"]
+                vars_data["satellite_config_satellite_deployment_version"] = (
+                    public_values["deployment_version"]
+                )
+                vars_data["satellite_install_deployment_version"] = (
+                    public_values["deployment_version"]
+                )
             if public_values.get("location"):
                 vars_data["satellite_install_location"] = public_values["location"]
 
@@ -3796,7 +3951,8 @@ def merge_component(component, cfg):
                 public_values.get("data_disk_min_size"),
             )
             if data_disk_min_size is not None:
-                vars_data["satellite_install_data_disk_min_size"] = QuotedString(str(data_disk_min_size))
+                vars_data["satellite_install_data_disk_min_size"] = QuotedString(
+                    str(data_disk_min_size))
             data_device_name = first_present(
                 public_values.get("satellite_install_data_device_name"),
                 public_values.get("satellite_data_device_name"),
@@ -3832,9 +3988,12 @@ def merge_component(component, cfg):
                 public_values.get("admin_activation_key"),
             )
             if rhn_activation_key is not None:
-                vault_data["vault_satellite_rhn_activation_key"] = QuotedString(str(rhn_activation_key))
-                vault_data["satellite_install_rhn_activation_key"] = QuotedString(str(rhn_activation_key))
-                vars_data["satellite_install_rhn_activation_key"] = vault_ref("vault_satellite_rhn_activation_key")
+                vault_data["vault_satellite_rhn_activation_key"] = QuotedString(
+                    str(rhn_activation_key))
+                vault_data["satellite_install_rhn_activation_key"] = QuotedString(
+                    str(rhn_activation_key))
+                vars_data["satellite_install_rhn_activation_key"] = vault_ref(
+                    "vault_satellite_rhn_activation_key")
                 vars_data["satellite_install_rhn_connected"] = True
                 vault_data_changed = True
             client_activation_key = first_present(
@@ -3845,7 +4004,8 @@ def merge_component(component, cfg):
             )
             if client_activation_key is not None:
                 vars_data["satellite_activation_key"] = QuotedString(str(client_activation_key))
-                vars_data["rhel_sat_reg_activation_key_name"] = QuotedString(str(client_activation_key))
+                vars_data["rhel_sat_reg_activation_key_name"] = QuotedString(
+                    str(client_activation_key))
                 vars_data_changed = True
             req_dirs = first_present(
                 public_values.get("satellite_install_req_dirs"),
@@ -3861,16 +4021,19 @@ def merge_component(component, cfg):
                 selected_size = next(
                     (
                         item for item in satellite_sizes
-                        if isinstance(item, dict) and item.get("name") == public_values["size_profile"]
+                        if isinstance(item, dict)
+                        and item.get("name") == public_values["size_profile"]
                     ),
                     {},
                 )
                 if selected_size.get("min_ram") is not None:
-                    vars_data["satellite_install_min_memory_size"] = int(selected_size["min_ram"]) * 1024
+                    vars_data["satellite_install_min_memory_size"] = int(
+                        selected_size["min_ram"]) * 1024
                 if selected_size.get("min_cpu") is not None:
                     vars_data["satellite_install_min_cpu_count"] = int(selected_size["min_cpu"])
 
-            oidc_cfg = public_values.get("oidc") if isinstance(public_values.get("oidc"), dict) else {}
+            oidc_cfg = public_values.get("oidc") if isinstance(
+                public_values.get("oidc"), dict) else {}
             oidc_client_id = first_present(
                 oidc_cfg.get("client_id"),
                 public_values.get("oidc_client_id"),
@@ -4117,7 +4280,10 @@ def merge_component(component, cfg):
                         public_values["capsule_install_setup_insights"], False
                     )
                     vars_data_changed = True
-                if "satellite_haproxy" in public_values or "capsule_install_satellite_haproxy" in public_values:
+                if (
+                    "satellite_haproxy" in public_values
+                    or "capsule_install_satellite_haproxy" in public_values
+                ):
                     vars_data["capsule_install_satellite_haproxy"] = as_bool(
                         first_present(
                             public_values.get("capsule_install_satellite_haproxy"),
@@ -4331,7 +4497,9 @@ def merge_component(component, cfg):
                 vars_data["idm_configure_replica_setup_ca"] = public_values["replica_install_ca"]
             if "auto_forwarders" in public_values:
                 vars_data["idm_auto_forwarders"] = public_values["auto_forwarders"]
-                vars_data["idm_configure_replica_auto_forwarders"] = public_values["auto_forwarders"]
+                vars_data["idm_configure_replica_auto_forwarders"] = (
+                    public_values["auto_forwarders"]
+                )
             if public_values.get("custom_cert_file"):
                 vars_data["idm_custom_cert_file"] = public_values["custom_cert_file"]
             if public_values.get("custom_cert_key_file"):
@@ -4372,9 +4540,13 @@ def merge_component(component, cfg):
                 vars_data.setdefault("components_env", {}).setdefault("rhel", {})
                 vars_data["components_env"]["rhel"]["stig_engine"] = rhel_values["stig_engine"]
             if rhel_values.get("rhel_stig_cac_remediate") is not None:
-                vars_data["rhel_stig_cac_remediate"] = rhel_values["rhel_stig_cac_remediate"]
+                vars_data["rhel_stig_cac_remediate"] = rhel_values[
+                    "rhel_stig_cac_remediate"
+                ]
                 vars_data.setdefault("components_env", {}).setdefault("rhel", {})
-                vars_data["components_env"]["rhel"]["rhel_stig_cac_remediate"] = rhel_values["rhel_stig_cac_remediate"]
+                vars_data["components_env"]["rhel"][
+                    "rhel_stig_cac_remediate"
+                ] = rhel_values["rhel_stig_cac_remediate"]
             if public_values.get("profile"):
                 vars_data["stig_profile"] = public_values["profile"]
                 vars_data["rhel_stig_profile"] = public_values["profile"]
@@ -4385,7 +4557,9 @@ def merge_component(component, cfg):
             if public_values.get("remediate") is not None:
                 vars_data["rhel_stig_cac_remediate"] = public_values["remediate"]
                 vars_data.setdefault("components_env", {}).setdefault("rhel", {})
-                vars_data["components_env"]["rhel"]["rhel_stig_cac_remediate"] = public_values["remediate"]
+                vars_data["components_env"]["rhel"][
+                    "rhel_stig_cac_remediate"
+                ] = public_values["remediate"]
 
         if component in ("quay", "kafka", "acs", "acm") and vars_data.get("storage"):
             normalized_storage = effective_storage_class(preflight, vars_data.get("storage"))
@@ -4424,8 +4598,12 @@ def merge_component(component, cfg):
 
         if component == "satellite":
             if secret_values.get("service_account_password") is not None:
-                vault_data["vault_satellite_service_account_password"] = secret_values["service_account_password"]
-                vault_data["satellite_config_password"] = secret_values["service_account_password"]
+                vault_data["vault_satellite_service_account_password"] = (
+                    secret_values["service_account_password"]
+                )
+                vault_data["satellite_config_password"] = secret_values[
+                    "service_account_password"
+                ]
                 vault_data_changed = True
             if secret_values.get("admin_password") is not None:
                 vault_data["vault_satellite_admin_password"] = secret_values["admin_password"]
@@ -4485,9 +4663,12 @@ def merge_component(component, cfg):
                 public_values.get("admin_activation_key"),
             )
             if rhn_activation_key is not None:
-                vault_data["vault_satellite_rhn_activation_key"] = QuotedString(str(rhn_activation_key))
-                vault_data["satellite_install_rhn_activation_key"] = QuotedString(str(rhn_activation_key))
-                vars_data["satellite_install_rhn_activation_key"] = vault_ref("vault_satellite_rhn_activation_key")
+                vault_data["vault_satellite_rhn_activation_key"] = QuotedString(
+                    str(rhn_activation_key))
+                vault_data["satellite_install_rhn_activation_key"] = QuotedString(
+                    str(rhn_activation_key))
+                vars_data["satellite_install_rhn_activation_key"] = vault_ref(
+                    "vault_satellite_rhn_activation_key")
                 vars_data["satellite_install_rhn_connected"] = True
                 vars_data_changed = True
                 vault_data_changed = True
@@ -4504,7 +4685,8 @@ def merge_component(component, cfg):
             )
             if client_activation_key is not None:
                 vars_data["satellite_activation_key"] = QuotedString(str(client_activation_key))
-                vars_data["rhel_sat_reg_activation_key_name"] = QuotedString(str(client_activation_key))
+                vars_data["rhel_sat_reg_activation_key_name"] = QuotedString(
+                    str(client_activation_key))
                 vars_data_changed = True
 
             if vars_data_changed:
@@ -4522,16 +4704,26 @@ def merge_component(component, cfg):
                 vault_data["idm_configure_replica_admin_password"] = secret_values["admin_password"]
                 vault_data["idm_ad_trust_ipa_admin_password"] = secret_values["admin_password"]
             if secret_values.get("directory_manager_password") is not None:
-                vault_data["vault_idm_directory_manager_password"] = secret_values["directory_manager_password"]
-                vault_data["idm_configure_replica_dm_password"] = secret_values["directory_manager_password"]
+                vault_data["vault_idm_directory_manager_password"] = (
+                    secret_values["directory_manager_password"]
+                )
+                vault_data["idm_configure_replica_dm_password"] = (
+                    secret_values["directory_manager_password"]
+                )
             if secret_values.get("ad_admin_password") is not None:
                 vault_data["vault_ad_trust_admin_password"] = secret_values["ad_admin_password"]
                 vault_data["idm_ad_trust_ad_admin_password"] = secret_values["ad_admin_password"]
 
-        if component in ("ec2_ami_copy", "aws", "cert_manager"):
+        if component in (
+            "ec2_ami_copy",
+            "ec2_instance",
+            "s3_bucket_policy",
+            "aws",
+            "cert_manager",
+        ):
             merge_shared_aws_vault({**public_values, **secret_values})
 
-        if component == "ec2_ami_copy":
+        if component in ("ec2_ami_copy", "ec2_instance", "s3_bucket_policy"):
             if vault_path.exists():
                 vault_path.unlink()
         elif component != "aws":
@@ -5088,7 +5280,11 @@ if "oauth_rhbk" in openshift_options:
         oidc_auth = {
             **oidc_auth,
             "enabled": True,
-            "openshift_oidc_idp_name": idp_name or oidc_auth.get("openshift_oidc_idp_name") or "Keycloak",
+            "openshift_oidc_idp_name": (
+                idp_name
+                or oidc_auth.get("openshift_oidc_idp_name")
+                or "Keycloak"
+            ),
             "keycloak_client_id": client_id or oidc_auth.get("keycloak_client_id") or "",
             "openshift_oidc_mapping_method": mapping_method,
             "openshift_oauth_resource_name": "cluster",
