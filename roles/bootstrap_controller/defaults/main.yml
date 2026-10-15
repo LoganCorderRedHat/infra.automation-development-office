@@ -108,6 +108,42 @@ bootstrap_controller_console_banner_state_choices:
   - delete
 bootstrap_controller_default_state: present
 
+# amazon.aws.ec2_instance state= choices (modify survey).
+bootstrap_controller_ec2_instance_state_choices:
+  - present
+  - running
+  - started
+  - stopped
+  - restarted
+  - rebooted
+
+# Curated instance_type list for Contoller surveys (amazon.aws accepts any
+# valid EC2 type; module examples use t2/t3/c4/c5 families).
+bootstrap_controller_ec2_instance_type_choices:
+  - t3.micro
+  - t3.small
+  - t3.medium
+  - t3.large
+  - t3.xlarge
+  - t3a.micro
+  - t3a.small
+  - t3a.medium
+  - t3a.large
+  - t2.micro
+  - t2.small
+  - t2.medium
+  - t2.large
+  - m5.large
+  - m5.xlarge
+  - m6i.large
+  - m6i.xlarge
+  - c5.large
+  - c5.xlarge
+  - c6i.large
+  - r5.large
+  - r6i.large
+bootstrap_controller_ec2_instance_type_default: t3.small
+
 # Job Template Defaults
 bootstrap_controller_job_templates_defaults:
   job_type: run

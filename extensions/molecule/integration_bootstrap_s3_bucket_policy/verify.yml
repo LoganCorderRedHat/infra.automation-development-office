@@ -1,0 +1,132 @@
+---
+# yamllint disable rule:line-length
+- name: Verify s3_bucket_policy bootstrap content
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  vars:
+    env: molecule
+    ado_s3_bootstrap_playbooks:
+      - playbooks/aws/s3/ado-s3-bucket-policy-set-bootstrap.yml
+      - playbooks/aws/s3/ado-s3-bucket-policy-set-from-file-bootstrap.yml
+      - playbooks/aws/s3/ado-s3-bucket-policy-info-bootstrap.yml
+      - playbooks/aws/s3/tasks/promote-s3-bucket-policy-facts.yml
+      - playbooks/aws/s3/policies/allow_list_and_read.json
+    ado_s3_bootstrap_jts:
+      - ado-s3-bucket-policy-set-bootstrap.jt.yml
+      - ado-s3-bucket-policy-set-from-file-bootstrap.jt.yml
+      - ado-s3-bucket-policy-info-bootstrap.jt.yml
+
+  tasks:
+    - name: Verify generated S3 bootstrap playbooks and sample policy exist
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/{{ item }}"
+      loop: "{{ ado_s3_bootstrap_playbooks }}"
+      register: ado_s3_playbook_stats
+
+    - name: Assert S3 bootstrap artifacts were generated
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+        fail_msg: "Expected {{ item.item }} to be generated"
+      loop: "{{ ado_s3_playbook_stats.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Assert set bootstrap imports collection FQCN
+      ansible.builtin.command:
+        cmd: >-
+          grep -F 'infra.ado.aws.s3.ado_s3_bucket_policy_set'
+          {{ playbook_dir }}/playbooks/aws/s3/ado-s3-bucket-policy-set-bootstrap.yml
+      changed_when: false
+
+    - name: Assert sample policy contains Jinja placeholders
+      ansible.builtin.command:
+        cmd: >-
+          grep -E 's3_bucket_name|s3_bucket_aws_account_id|s3_bucket_reader_role_name'
+          {{ playbook_dir }}/playbooks/aws/s3/policies/allow_list_and_read.json
+      changed_when: false
+
+    - name: Verify generated job templates exist
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/configs/job_templates/{{ item }}"
+      loop: "{{ ado_s3_bootstrap_jts }}"
+      register: ado_s3_jt_stats
+
+    - name: Assert S3 job templates were generated
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+        fail_msg: "Expected configs/job_templates/{{ item.item }}"
+      loop: "{{ ado_s3_jt_stats.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Verify generated component vars file exists
+      ansible.builtin.stat:
+        path: >-
+          {{ playbook_dir }}/group_vars/all/{{ env }}/vars_s3_bucket_policy.yml
+      register: s3_bucket_policy_vars_file
+
+    - name: Assert s3_bucket_policy vars file was generated
+      ansible.builtin.assert:
+        that:
+          - s3_bucket_policy_vars_file.stat.exists
+        fail_msg: Expected group_vars/all/{{ env }}/vars_s3_bucket_policy.yml
+
+    - name: Verify shared AWS vault exists and per-app vault does not
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/group_vars/all/{{ env }}/{{ item }}"
+      loop:
+        - vault_aws.yml
+        - vault_s3_bucket_policy.yml
+      register: ado_s3_vault_stats
+
+    - name: Assert vault_aws present and vault_s3_bucket_policy absent
+      ansible.builtin.assert:
+        that:
+          - ado_s3_vault_stats.results[0].stat.exists
+          - not ado_s3_vault_stats.results[1].stat.exists
+        fail_msg: s3_bucket_policy must use shared vault_aws.yml only
+
+    - name: Load generated vars for s3_bucket_policy
+      ansible.builtin.slurp:
+        src: "{{ s3_bucket_policy_vars_file.stat.path }}"
+      register: s3_bucket_policy_vars_raw
+
+    - name: Parse generated vars for s3_bucket_policy
+      ansible.builtin.set_fact:
+        s3_bucket_policy_generated_vars: >-
+          {{ s3_bucket_policy_vars_raw.content | b64decode | from_yaml }}
+
+    - name: Assert generated vars contain expected s3_bucket_policy defaults
+      ansible.builtin.assert:
+        that:
+          - s3_bucket_policy_generated_vars.s3_bucket_name == 'molecule-s3-bucket'
+          - >-
+            s3_bucket_policy_generated_vars.s3_bucket_aws_account_id
+            == '111122223333'
+          - >-
+            s3_bucket_policy_generated_vars.s3_bucket_reader_role_name
+            == 'MoleculeReader'
+        fail_msg: Generated vars_s3_bucket_policy.yml did not match preflight config
+
+    - name: Load generated shared AWS vault
+      ansible.builtin.slurp:
+        src: "{{ playbook_dir }}/group_vars/all/{{ env }}/vault_aws.yml"
+      register: aws_vault_raw
+
+    - name: Assert vault_aws received preflight AWS credentials
+      ansible.builtin.assert:
+        that:
+          - >-
+            (aws_vault_raw.content | b64decode | from_yaml).vault_aws_access_key_id
+            == 'MOLECULE_AWS_ACCESS_KEY_ID'
+          - >-
+            (aws_vault_raw.content | b64decode | from_yaml).vault_aws_secret_access_key
+            == 'MOLECULE_AWS_SECRET_ACCESS_KEY'
+        fail_msg: vault_aws.yml missing preflight AWS credentials
+# yamllint enable rule:line-length

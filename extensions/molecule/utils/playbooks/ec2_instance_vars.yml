@@ -1,0 +1,20 @@
+---
+# yamllint disable rule:line-length
+# Shared vars for ec2_instance Molecule fakecloud scenarios (via vars_files).
+ec2_instance_molecule_region: us-east-1
+ec2_instance_molecule_name: molecule-ec2-instance
+ec2_instance_molecule_type: t3.micro
+ec2_instance_molecule_vpc_cidr: 10.77.0.0/16
+ec2_instance_molecule_subnet_cidr: 10.77.1.0/24
+ec2_instance_molecule_artifact_root: >-
+  /tmp/{{ lookup('env', 'MOLECULE_SCENARIO_NAME') | default('integration_ec2_instance', true) }}
+ec2_instance_molecule_ami_file: >-
+  {{ ec2_instance_molecule_artifact_root }}/ami_id
+ec2_instance_molecule_subnet_file: >-
+  {{ ec2_instance_molecule_artifact_root }}/subnet_id
+ec2_instance_molecule_instance_id_file: >-
+  {{ ec2_instance_molecule_artifact_root }}/instance_id
+# Seed promote tasks (symlink to bootstrap seed file beside these playbooks).
+ec2_instance_molecule_promote_tasks: >-
+  {{ playbook_dir }}/tasks/promote-ec2-instance-facts.yml
+# yamllint enable rule:line-length

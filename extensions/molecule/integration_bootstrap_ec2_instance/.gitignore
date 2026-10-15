@@ -1,0 +1,17 @@
+ado-preflight-ec2-instance.json
+alerts/
+.ansible/
+ansible.cfg
+collections/
+.component-catalog.json
+component-run-plan.json
+configs/
+dashboards/
+group_vars/
+inventory/
+local_components.py
+*.log
+playbooks/
+*.retry
+templates/
+.vault_pass

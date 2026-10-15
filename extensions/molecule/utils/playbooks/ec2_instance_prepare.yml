@@ -1,0 +1,102 @@
+---
+# yamllint disable rule:line-length
+- name: Prepare - ec2_instance fakecloud scenario
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - ec2_instance_vars.yml
+
+  tasks:
+    - name: Ensure scenario artifact directory exists
+      ansible.builtin.file:
+        path: "{{ ec2_instance_molecule_artifact_root }}"
+        state: directory
+        mode: "0700"
+
+    - name: Find existing molecule VPC by tag
+      amazon.aws.ec2_vpc_net_info:
+        region: "{{ ec2_instance_molecule_region }}"
+        filters:
+          "tag:Name": molecule-ec2-instance-vpc
+          "tag:MoleculeScenario": integration_ec2_instance
+      register: ec2_instance_molecule_vpc_info
+
+    - name: Create VPC in fakecloud when missing
+      amazon.aws.ec2_vpc_net:
+        name: molecule-ec2-instance-vpc
+        cidr_block: "{{ ec2_instance_molecule_vpc_cidr }}"
+        region: "{{ ec2_instance_molecule_region }}"
+        state: present
+        tags:
+          Name: molecule-ec2-instance-vpc
+          MoleculeScenario: integration_ec2_instance
+      register: ec2_instance_molecule_vpc_create
+      when: ec2_instance_molecule_vpc_info.vpcs | length == 0
+
+    - name: Set VPC id
+      ansible.builtin.set_fact:
+        ec2_instance_molecule_vpc_id: >-
+          {{
+            (ec2_instance_molecule_vpc_info.vpcs[0].id)
+            if (ec2_instance_molecule_vpc_info.vpcs | length > 0)
+            else ec2_instance_molecule_vpc_create.vpc.id
+          }}
+
+    - name: Find existing molecule subnet by tag
+      amazon.aws.ec2_vpc_subnet_info:
+        region: "{{ ec2_instance_molecule_region }}"
+        filters:
+          vpc-id: "{{ ec2_instance_molecule_vpc_id }}"
+          "tag:Name": molecule-ec2-instance-subnet
+          "tag:MoleculeScenario": integration_ec2_instance
+      register: ec2_instance_molecule_subnet_info
+
+    - name: Create subnet in fakecloud when missing
+      amazon.aws.ec2_vpc_subnet:
+        vpc_id: "{{ ec2_instance_molecule_vpc_id }}"
+        cidr: "{{ ec2_instance_molecule_subnet_cidr }}"
+        region: "{{ ec2_instance_molecule_region }}"
+        state: present
+        tags:
+          Name: molecule-ec2-instance-subnet
+          MoleculeScenario: integration_ec2_instance
+      register: ec2_instance_molecule_subnet_create
+      when: ec2_instance_molecule_subnet_info.subnets | length == 0
+
+    - name: Persist subnet id for converge
+      ansible.builtin.copy:
+        content: >-
+          {{
+            (ec2_instance_molecule_subnet_info.subnets[0].id)
+            if (ec2_instance_molecule_subnet_info.subnets | length > 0)
+            else ec2_instance_molecule_subnet_create.subnet.id
+          }}
+        dest: "{{ ec2_instance_molecule_subnet_file }}"
+        mode: "0600"
+      changed_when: false
+
+    - name: Discover seeded public AMI in fakecloud
+      amazon.aws.ec2_ami_info:
+        region: "{{ ec2_instance_molecule_region }}"
+        owners: amazon
+        filters:
+          name: "al2023-ami-*"
+      register: ec2_instance_molecule_amis
+
+    - name: Fail when fakecloud has no seeded AMI
+      ansible.builtin.fail:
+        msg: >-
+          fakecloud did not return a seeded Amazon Linux 2023 AMI in
+          {{ ec2_instance_molecule_region }}.
+          Ensure fakecloud is running (scripts/ci/fakecloud-service.sh start).
+      when: ec2_instance_molecule_amis.images | length == 0
+
+    - name: Persist source AMI for converge
+      ansible.builtin.copy:
+        content: "{{ ec2_instance_molecule_amis.images[0].image_id }}"
+        dest: "{{ ec2_instance_molecule_ami_file }}"
+        mode: "0600"
+      changed_when: false
+# yamllint enable rule:line-length

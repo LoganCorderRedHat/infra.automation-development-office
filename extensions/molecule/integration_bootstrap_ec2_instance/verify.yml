@@ -1,0 +1,127 @@
+---
+# yamllint disable rule:line-length
+- name: Verify ec2_instance bootstrap content
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  vars:
+    env: molecule
+    ado_ec2_bootstrap_playbooks:
+      - playbooks/aws/ec2/ado-ec2-instance-create-bootstrap.yml
+      - playbooks/aws/ec2/ado-ec2-instance-delete-bootstrap.yml
+      - playbooks/aws/ec2/ado-ec2-instance-modify-bootstrap.yml
+      - playbooks/aws/ec2/ado-ec2-instance-info-bootstrap.yml
+      - playbooks/aws/ec2/tasks/promote-ec2-instance-facts.yml
+    ado_ec2_bootstrap_jts:
+      - ado-ec2-instance-create-bootstrap.jt.yml
+      - ado-ec2-instance-delete-bootstrap.jt.yml
+      - ado-ec2-instance-modify-bootstrap.jt.yml
+      - ado-ec2-instance-info-bootstrap.jt.yml
+
+  tasks:
+    - name: Verify generated EC2 bootstrap playbooks exist
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/{{ item }}"
+      loop: "{{ ado_ec2_bootstrap_playbooks }}"
+      register: ado_ec2_playbook_stats
+
+    - name: Assert EC2 bootstrap playbooks were generated
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+        fail_msg: "Expected {{ item.item }} to be generated"
+      loop: "{{ ado_ec2_playbook_stats.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Assert create bootstrap imports collection FQCN
+      ansible.builtin.command:
+        cmd: >-
+          grep -F 'infra.ado.aws.ec2.ado_ec2_instance_create'
+          {{ playbook_dir }}/playbooks/aws/ec2/ado-ec2-instance-create-bootstrap.yml
+      changed_when: false
+
+    - name: Verify generated job templates exist
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/configs/job_templates/{{ item }}"
+      loop: "{{ ado_ec2_bootstrap_jts }}"
+      register: ado_ec2_jt_stats
+
+    - name: Assert EC2 job templates were generated
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+        fail_msg: "Expected configs/job_templates/{{ item.item }}"
+      loop: "{{ ado_ec2_jt_stats.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Verify generated component vars file exists
+      ansible.builtin.stat:
+        path: >-
+          {{ playbook_dir }}/group_vars/all/{{ env }}/vars_ec2_instance.yml
+      register: ec2_instance_vars_file
+
+    - name: Assert ec2_instance vars file was generated
+      ansible.builtin.assert:
+        that:
+          - ec2_instance_vars_file.stat.exists
+        fail_msg: Expected group_vars/all/{{ env }}/vars_ec2_instance.yml
+
+    - name: Verify shared AWS vault exists and per-app vault does not
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/group_vars/all/{{ env }}/{{ item }}"
+      loop:
+        - vault_aws.yml
+        - vault_ec2_instance.yml
+      register: ado_ec2_vault_stats
+
+    - name: Assert vault_aws present and vault_ec2_instance absent
+      ansible.builtin.assert:
+        that:
+          - ado_ec2_vault_stats.results[0].stat.exists
+          - not ado_ec2_vault_stats.results[1].stat.exists
+        fail_msg: ec2_instance must use shared vault_aws.yml only
+
+    - name: Load generated vars for ec2_instance
+      ansible.builtin.slurp:
+        src: "{{ ec2_instance_vars_file.stat.path }}"
+      register: ec2_instance_vars_raw
+
+    - name: Parse generated vars for ec2_instance
+      ansible.builtin.set_fact:
+        ec2_instance_generated_vars: >-
+          {{ ec2_instance_vars_raw.content | b64decode | from_yaml }}
+
+    - name: Assert generated vars contain expected ec2_instance defaults
+      ansible.builtin.assert:
+        that:
+          - ec2_instance_generated_vars.ec2_instance_name == 'molecule-ec2'
+          - >-
+            ec2_instance_generated_vars.ec2_instance_image_id
+            == 'ami-0123456789abcdef0'
+          - ec2_instance_generated_vars.ec2_instance_type == 't3.small'
+          - >-
+            ec2_instance_generated_vars.ec2_instance_subnet_id
+            == 'subnet-0123456789abcdef0'
+        fail_msg: Generated vars_ec2_instance.yml did not match preflight config
+
+    - name: Load generated shared AWS vault
+      ansible.builtin.slurp:
+        src: "{{ playbook_dir }}/group_vars/all/{{ env }}/vault_aws.yml"
+      register: aws_vault_raw
+
+    - name: Assert vault_aws received preflight AWS credentials
+      ansible.builtin.assert:
+        that:
+          - >-
+            (aws_vault_raw.content | b64decode | from_yaml).vault_aws_access_key_id
+            == 'MOLECULE_AWS_ACCESS_KEY_ID'
+          - >-
+            (aws_vault_raw.content | b64decode | from_yaml).vault_aws_secret_access_key
+            == 'MOLECULE_AWS_SECRET_ACCESS_KEY'
+        fail_msg: vault_aws.yml missing preflight AWS credentials
+# yamllint enable rule:line-length

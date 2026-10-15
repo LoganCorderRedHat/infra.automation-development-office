@@ -1,0 +1,114 @@
+---
+# yamllint disable rule:line-length
+# FQCN: infra.ado.aws.s3.ado_s3_bucket_policy_info
+# Read the resource policy on one S3 bucket (amazon.aws.s3_bucket_info).
+#
+# Required:
+#   s3_bucket_name
+# Optional:
+#   s3_bucket_region, s3_bucket_endpoint_url, aws_profile, vault_aws_*
+
+- name: ADO | S3 bucket policy info
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Assert required vars for S3 bucket policy info
+      ansible.builtin.assert:
+        that:
+          - (s3_bucket_name | default('') | string | length) > 0
+        fail_msg: Set s3_bucket_name.
+
+    - name: Resolve region and endpoint for S3
+      ansible.builtin.set_fact:
+        ado_s3_bucket_region: >-
+          {{
+            s3_bucket_region
+            | default(aws_default_region | default('us-east-1', true), true)
+          }}
+        ado_s3_bucket_endpoint: >-
+          {{
+            s3_bucket_endpoint_url
+            | default(lookup('env', 'AWS_ENDPOINT_URL') | default('', true), true)
+          }}
+
+    - name: Get the S3 bucket policy
+      amazon.aws.s3_bucket_info:
+        name: "{{ s3_bucket_name }}"
+        region: "{{ ado_s3_bucket_region }}"
+        bucket_facts:
+          bucket_policy: true
+          bucket_policy_status: true
+        profile: >-
+          {{
+            aws_profile
+            if (aws_profile | default('') | string | length) > 0
+            else omit
+          }}
+        endpoint_url: >-
+          {{
+            ado_s3_bucket_endpoint
+            if (ado_s3_bucket_endpoint | length) > 0
+            else omit
+          }}
+        aws_config: >-
+          {{
+            {'s3': {'addressing_style': 'path'}}
+            if (ado_s3_bucket_endpoint | length) > 0
+            else omit
+          }}
+        access_key: >-
+          {{
+            vault_aws_access_key_id
+            if (vault_aws_access_key_id | default('') | length) > 0
+            else omit
+          }}
+        secret_key: >-
+          {{
+            vault_aws_secret_access_key
+            if (vault_aws_secret_access_key | default('') | length) > 0
+            else omit
+          }}
+        session_token: >-
+          {{
+            vault_aws_session_token
+            if (vault_aws_session_token | default('') | length) > 0
+            else omit
+          }}
+      register: ado_s3_bucket_info
+
+    - name: Require the named bucket
+      ansible.builtin.assert:
+        that:
+          - ado_s3_bucket_info.buckets | length == 1
+          - ado_s3_bucket_info.buckets[0].name == s3_bucket_name
+        fail_msg: >-
+          No S3 bucket named {{ s3_bucket_name }} was returned.
+          Confirm the name, region, and that this identity can list the bucket.
+
+    - name: Record the bucket policy document
+      ansible.builtin.set_fact:
+        s3_bucket_policy: >-
+          {{ _policy if _policy is mapping else (_policy | from_json) }}
+        s3_bucket_policy_is_public: >-
+          {{
+            ado_s3_bucket_info.buckets[0].bucket_policy_status.PolicyStatus.IsPublic
+            | default(false)
+          }}
+      vars:
+        _raw: "{{ ado_s3_bucket_info.buckets[0].bucket_policy | default({}) }}"
+        _policy: "{{ _raw.Policy | default(_raw) }}"
+
+    - name: Show the bucket policy
+      ansible.builtin.debug:
+        msg:
+          bucket: "{{ s3_bucket_name }}"
+          region: "{{ ado_s3_bucket_region }}"
+          policy_present: "{{ (s3_bucket_policy | length) > 0 }}"
+          is_public: "{{ s3_bucket_policy_is_public }}"
+          policy: >-
+            {{
+              s3_bucket_policy
+              if (s3_bucket_policy | length) > 0
+              else 'No bucket policy is set.'
+            }}
+# yamllint enable rule:line-length

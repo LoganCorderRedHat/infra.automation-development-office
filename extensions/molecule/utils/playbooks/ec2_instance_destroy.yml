@@ -1,0 +1,56 @@
+---
+# yamllint disable rule:line-length
+# Destroy terminates via the same bootstrap import_playbook path as Contoller.
+- name: Promote delete vars (bootstrap style)
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - ec2_instance_vars.yml
+
+  tasks:
+    - name: Set delete inputs (by Name tag)
+      ansible.builtin.set_fact:
+        ec2_instance_name: "{{ ec2_instance_molecule_name }}"
+        ec2_instance_ids: []
+        ec2_instance_region: "{{ ec2_instance_molecule_region }}"
+        ec2_instance_wait: true
+        ec2_instance_wait_timeout: 120
+
+    - name: ADO | Promote vars for imported delete playbook
+      ansible.builtin.include_tasks: "{{ ec2_instance_molecule_promote_tasks }}"
+
+- ansible.builtin.import_playbook: infra.ado.aws.ec2.ado_ec2_instance_delete
+
+- name: Destroy - remove ec2_instance scenario artifacts
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - ec2_instance_vars.yml
+
+  tasks:
+    - name: Assert no non-terminated instance remains by Name
+      amazon.aws.ec2_instance_info:
+        region: "{{ ec2_instance_molecule_region }}"
+        filters:
+          "tag:Name": "{{ ec2_instance_molecule_name }}"
+          instance-state-name: ["pending", "running", "stopping", "stopped"]
+      register: ec2_instance_molecule_remaining
+
+    - name: Fail when delete left live instances
+      ansible.builtin.assert:
+        that:
+          - ec2_instance_molecule_remaining.instances | length == 0
+        fail_msg: >-
+          Delete import_playbook left
+          {{ ec2_instance_molecule_remaining.instances | length }}
+          instance(s) named {{ ec2_instance_molecule_name }}.
+
+    - name: Remove scenario artifact directory
+      ansible.builtin.file:
+        path: "{{ ec2_instance_molecule_artifact_root }}"
+        state: absent
+# yamllint enable rule:line-length

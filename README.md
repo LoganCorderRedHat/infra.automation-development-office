@@ -30,6 +30,10 @@ infrastructure components consistently.
     Jira, and related helpers
 - **Modules** for focused tasks that do not fit a role, such as copying an AWS
   AMI between regions without depending on `community.aws`
+- **Collection playbooks** for portable AWS day-2 work (EC2 instance lifecycle
+  and S3 bucket policy). Bootstrap apps under the ``aws`` platform
+  (``ec2_instance``, ``s3_bucket_policy``, ``ec2_ami_copy``) share
+  ``vault_aws.yml``
 
 <!--start requires_ansible-->
 ## Ansible version compatibility
@@ -46,6 +50,8 @@ PEP440 is the schema used to describe the versions of Ansible.
 | Type | Name | Description |
 | --- | --- | --- |
 | Module | [`infra.ado.ec2_ami_copy`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/docs/modules/ec2_ami_copy.md) | Copy an AWS AMI between regions; optionally rename with `name` or omit it to keep the source name. |
+| Playbooks | [`playbooks/aws/ec2`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/playbooks/aws/ec2/README.md) | EC2 create / delete / modify / info (`infra.ado.aws.ec2.ado_ec2_instance_*`). |
+| Playbooks | [`playbooks/aws/s3`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/playbooks/aws/s3/README.md) | S3 bucket policy set / set-from-file / info (`infra.ado.aws.s3.ado_s3_bucket_policy_*`). |
 | Role | See [Role documentation](#role-documentation) | Platform automation roles (AAP, OpenShift, RHEL, identity, and more). |
 
 ## Module documentation
@@ -56,6 +62,24 @@ Use this index as the starting point for operators and automation users.
 | Module | Description |
 | --- | --- |
 | [`infra.ado.ec2_ami_copy`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/docs/modules/ec2_ami_copy.md) | Copy an AWS AMI between regions; optionally rename with `name` or omit it to keep the source name. |
+
+## Collection playbooks
+
+Portable AWS playbooks live under `playbooks/aws/` and are addressable by
+collection FQCN after `ansible-galaxy collection install`. Details, variables,
+and examples stay in each directory README:
+
+| Path | FQCN prefix | Purpose |
+| --- | --- | --- |
+| [`playbooks/aws/ec2`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/playbooks/aws/ec2/README.md) | `infra.ado.aws.ec2.ado_ec2_instance_*` | EC2 instance create, delete, modify, and info |
+| [`playbooks/aws/s3`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/playbooks/aws/s3/README.md) | `infra.ado.aws.s3.ado_s3_bucket_policy_*` | Create a bucket if needed and set or read its resource policy |
+
+When preflight selects the ``aws`` platform apps ``ec2_instance`` or
+``s3_bucket_policy``, bootstrap seeds Contoller job templates that
+``import_playbook`` those FQCNs and load shared ``vault_aws.yml`` (no
+per-app AWS vault). ``s3_bucket_policy`` also seeds a Jinja sample policy at
+``playbooks/aws/s3/policies/allow_list_and_read.json`` (override with
+``s3_bucket_policy_file``).
 
 ## Role documentation
 
@@ -248,6 +272,18 @@ Run a scenario from `extensions/`:
 cd /path/to/your/git/checkout/infra.ado/extensions
 molecule test -s integration_rhel_cron_full_special
 ```
+
+Some AWS scenarios call real AWS SDK APIs against
+[fakecloud](https://fakecloud.dev/). CI starts fakecloud only for names listed in
+`extensions/molecule/fakecloud_scenarios.txt`. Local setup and the current list
+are in [`extensions/molecule/FAKECLOUD.md`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/extensions/molecule/FAKECLOUD.md).
+Examples:
+
+- `integration_ec2_instance` / `integration_s3_bucket_policy` — functional
+  promote + ``import_playbook`` paths against fakecloud
+- `integration_bootstrap_ec2_instance` /
+  `integration_bootstrap_s3_bucket_policy` — preflight → generated bootstrap
+  content (no fakecloud)
 
 ### GitHub Actions manual runs
 

@@ -1,0 +1,127 @@
+---
+# yamllint disable rule:line-length
+# FQCN: infra.ado.aws.ec2.ado_ec2_instance_create
+# Create / ensure an EC2 instance exists (amazon.aws.ec2_instance).
+# Examples adapted from:
+# https://docs.ansible.com/ansible/latest/collections/amazon/aws/ec2_instance_module.html
+#
+# Required:
+#   ec2_instance_name
+#   ec2_instance_image_id
+#   ec2_instance_type
+#   ec2_instance_subnet_id
+# Optional:
+#   ec2_instance_key_name, ec2_instance_security_group,
+#   ec2_instance_security_groups, ec2_instance_tags,
+#   ec2_instance_assign_public_ip, ec2_instance_volumes,
+#   ec2_instance_region, ec2_instance_wait, ec2_instance_wait_timeout,
+#   ec2_instance_filters (override amazon.aws default match filters;
+#     useful for fakecloud where subnet-id placement may not stick)
+# Auth (any one path): AWS env vars, aws_profile, or vault_aws_* keys
+
+# Note: do not put empty-dict/list defaults in play vars — they override
+# host facts promoted by bootstrap seeds before import_playbook.
+- name: ADO | Create EC2 instance
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Assert required vars for create
+      ansible.builtin.assert:
+        that:
+          - (ec2_instance_name | default('') | string | length) > 0
+          - (ec2_instance_image_id | default('') | string | length) > 0
+          - (ec2_instance_type | default('') | string | length) > 0
+          - (ec2_instance_subnet_id | default('') | string | length) > 0
+        fail_msg: >-
+          Set ec2_instance_name, ec2_instance_image_id, ec2_instance_type,
+          and ec2_instance_subnet_id.
+
+    - name: Create EC2 instance
+      amazon.aws.ec2_instance:
+        name: "{{ ec2_instance_name }}"
+        image_id: "{{ ec2_instance_image_id }}"
+        instance_type: "{{ ec2_instance_type }}"
+        vpc_subnet_id: "{{ ec2_instance_subnet_id }}"
+        key_name: >-
+          {{
+            ec2_instance_key_name
+            if (ec2_instance_key_name | default('') | string | length) > 0
+            else omit
+          }}
+        security_group: >-
+          {{
+            ec2_instance_security_group
+            if (ec2_instance_security_group | default('') | string | length) > 0
+            else omit
+          }}
+        security_groups: >-
+          {{
+            ec2_instance_security_groups
+            if (ec2_instance_security_groups | default([]) | length) > 0
+            else omit
+          }}
+        network_interfaces: >-
+          {{
+            [{'assign_public_ip': true}]
+            if (ec2_instance_assign_public_ip | default(false) | bool)
+            else omit
+          }}
+        volumes: >-
+          {{
+            ec2_instance_volumes
+            if (ec2_instance_volumes | default([]) | length) > 0
+            else omit
+          }}
+        tags: >-
+          {{
+            ec2_instance_tags
+            if (ec2_instance_tags | default({}) | length) > 0
+            else omit
+          }}
+        filters: >-
+          {{
+            ec2_instance_filters
+            if (ec2_instance_filters | default({}) | length) > 0
+            else omit
+          }}
+        state: present
+        wait: "{{ ec2_instance_wait | default(true) | bool }}"
+        wait_timeout: "{{ ec2_instance_wait_timeout | default(600) | int }}"
+        region: >-
+          {{
+            ec2_instance_region
+            if (ec2_instance_region | default('') | string | length) > 0
+            else omit
+          }}
+        access_key: >-
+          {{
+            vault_aws_access_key_id
+            if (vault_aws_access_key_id | default('') | length) > 0
+            else omit
+          }}
+        secret_key: >-
+          {{
+            vault_aws_secret_access_key
+            if (vault_aws_secret_access_key | default('') | length) > 0
+            else omit
+          }}
+        session_token: >-
+          {{
+            vault_aws_session_token
+            if (vault_aws_session_token | default('') | length) > 0
+            else omit
+          }}
+        profile: >-
+          {{
+            aws_profile
+            if (aws_profile | default('') | string | length) > 0
+            else omit
+          }}
+      register: ado_ec2_instance_create
+
+    - name: Show created instance IDs
+      ansible.builtin.debug:
+        msg:
+          instance_ids: "{{ ado_ec2_instance_create.instance_ids | default([]) }}"
+          instances: "{{ ado_ec2_instance_create.instances | default([]) }}"
+# yamllint enable rule:line-length

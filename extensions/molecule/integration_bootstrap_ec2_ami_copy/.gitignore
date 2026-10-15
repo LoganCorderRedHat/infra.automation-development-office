@@ -2,3 +2,16 @@
 *.retry
 *.log
 .vault_pass
+ansible.cfg
+.component-catalog.json
+component-run-plan.json
+local_components.py
+alerts/
+dashboards/
+playbooks/
+configs/
+group_vars/
+inventory/
+collections/
+templates/
+ado-preflight-ec2-ami-copy.json

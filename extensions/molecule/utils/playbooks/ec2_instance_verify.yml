@@ -1,0 +1,48 @@
+---
+# yamllint disable rule:line-length
+- name: Verify - ec2_instance fakecloud scenario
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - ec2_instance_vars.yml
+
+  tasks:
+    - name: Load persisted instance id
+      ansible.builtin.slurp:
+        src: "{{ ec2_instance_molecule_instance_id_file }}"
+      register: ec2_instance_molecule_id_raw
+
+    - name: Set instance id fact
+      ansible.builtin.set_fact:
+        ec2_instance_molecule_instance_id: >-
+          {{ ec2_instance_molecule_id_raw.content | b64decode | trim }}
+
+    - name: Describe instance via collection info playbook path inputs
+      amazon.aws.ec2_instance_info:
+        region: "{{ ec2_instance_molecule_region }}"
+        instance_ids:
+          - "{{ ec2_instance_molecule_instance_id }}"
+      register: ec2_instance_molecule_verify
+
+    - name: Assert instance exists with modified tag
+      ansible.builtin.assert:
+        that:
+          - ec2_instance_molecule_verify.instances | length == 1
+          - >-
+            ec2_instance_molecule_verify.instances[0].tags.Name
+            == ec2_instance_molecule_name
+          - >-
+            ec2_instance_molecule_verify.instances[0].tags.MoleculePhase
+            == 'modified'
+          - >-
+            ec2_instance_molecule_verify.instances[0].state.name
+            in ['pending', 'running']
+        fail_msg: >-
+          Instance {{ ec2_instance_molecule_instance_id }} missing expected
+          create/modify state in fakecloud.
+        success_msg: >-
+          Verified {{ ec2_instance_molecule_instance_id }} via
+          create/info/modify import_playbook path.
+# yamllint enable rule:line-length
