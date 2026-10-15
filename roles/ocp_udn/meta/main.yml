@@ -5,7 +5,7 @@ galaxy_info:
     Manage UserDefinedNetwork, ClusterUserDefinedNetwork, and
     NetworkAttachmentDefinition resources for OpenShift OVN-Kubernetes.
   company: Automation Development Office
-  license: Apache-2.0
+  license: GPL-3.0-or-later
   min_ansible_version: "2.14"
   platforms:
     - name: EL

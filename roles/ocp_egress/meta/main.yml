@@ -4,7 +4,7 @@ galaxy_info:
   description: >-
     Manage OpenShift egress resources — EgressIP and EgressFirewall.
   company: Automation Development Office
-  license: Apache-2.0
+  license: GPL-3.0-or-later
   min_ansible_version: "2.14"
   platforms:
     - name: EL
