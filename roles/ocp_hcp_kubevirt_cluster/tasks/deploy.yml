@@ -1,0 +1,100 @@
+---
+# yamllint disable rule:line-length
+# Create-if-absent. An existing HostedCluster is never re-applied or
+# recreated; differences in immutable fields are reported only.
+- name: Shift on Shift deploy | Reset per-cluster facts
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__apps_lb_ip: ""
+    ocp_hcp_kubevirt_cluster__verify: {}
+    ocp_hcp_kubevirt_cluster__drift: []
+
+- name: Shift on Shift deploy | Look up current state
+  ansible.builtin.include_tasks: lookup.yml
+
+- name: Shift on Shift deploy | Refuse a HostedCluster that is being deleted | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.assert:
+    that:
+      - ocp_hcp_kubevirt_cluster__hc.metadata.deletionTimestamp is not defined
+    fail_msg: >-
+      HostedCluster {{ ocp_hcp_kubevirt_cluster__def.namespace }}/{{ ocp_hcp_kubevirt_cluster__def.name }}
+      is being deleted. Wait for deletion to finish before deploying it again.
+    quiet: true
+  when: ocp_hcp_kubevirt_cluster__hc | length > 0
+
+- name: Shift on Shift deploy | Compare immutable fields | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__existed: "{{ ocp_hcp_kubevirt_cluster__hc | length > 0 }}"
+    ocp_hcp_kubevirt_cluster__drift: >-
+      {{
+        (ocp_hcp_kubevirt_cluster__def | infra.automation_development_office.hcp_kubevirt_immutable_drift(ocp_hcp_kubevirt_cluster__hc))
+        if ocp_hcp_kubevirt_cluster__hc | length > 0 else []
+      }}
+
+- name: Shift on Shift deploy | Report existing hosted cluster | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.debug:
+    msg: >-
+      HostedCluster {{ ocp_hcp_kubevirt_cluster__def.namespace }}/{{ ocp_hcp_kubevirt_cluster__def.name }}
+      already exists and will not be recreated or re-applied.
+      {{
+        ('Immutable fields differ from the definition (not changed): '
+         ~ (ocp_hcp_kubevirt_cluster__drift | map(attribute='field') | join(', ')))
+        if ocp_hcp_kubevirt_cluster__drift else 'Definition matches the immutable fields.'
+      }}
+  when: ocp_hcp_kubevirt_cluster__existed | bool
+
+- name: Shift on Shift deploy | Create the hosted cluster | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.include_tasks: create.yml
+  when: not ocp_hcp_kubevirt_cluster__existed | bool
+
+- name: Shift on Shift deploy | Create a missing default NodePool | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ ocp_hcp_kubevirt_cluster__def | infra.automation_development_office.hcp_kubevirt_nodepool_manifest }}"
+  when:
+    - ocp_hcp_kubevirt_cluster__existed | bool
+    - ocp_hcp_kubevirt_cluster_create_missing_nodepool | bool
+    - (ocp_hcp_kubevirt_cluster__hc.metadata.labels | default({}))['app.kubernetes.io/managed-by'] | default('') == 'infra.automation_development_office'
+    - ocp_hcp_kubevirt_cluster__nodepools | selectattr('metadata.name', 'equalto', ocp_hcp_kubevirt_cluster__def.nodepool.name) | list | length == 0
+
+- name: Shift on Shift deploy | Wait for readiness
+  ansible.builtin.include_tasks: wait.yml
+  when: ocp_hcp_kubevirt_cluster_wait | bool
+
+- name: Shift on Shift deploy | Expose the hosted ingress for a custom base domain
+  ansible.builtin.include_tasks: apps_lb.yml
+  when:
+    - ocp_hcp_kubevirt_cluster_wait | bool
+    - ocp_hcp_kubevirt_cluster__def.create_apps_load_balancer | bool
+
+- name: Shift on Shift deploy | Verify through the hosted API
+  ansible.builtin.include_tasks: verify.yml
+  when:
+    - ocp_hcp_kubevirt_cluster_wait | bool
+    - ocp_hcp_kubevirt_cluster_verify_hosted_api | bool
+
+- name: Shift on Shift deploy | Look up final state
+  ansible.builtin.include_tasks: lookup.yml
+
+- name: Shift on Shift deploy | Record result | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster_results: >-
+      {{
+        ocp_hcp_kubevirt_cluster_results + [{
+          'name': ocp_hcp_kubevirt_cluster__def.name,
+          'namespace': ocp_hcp_kubevirt_cluster__def.namespace,
+          'action': 'deploy',
+          'created': not (ocp_hcp_kubevirt_cluster__existed | bool),
+          'existed': ocp_hcp_kubevirt_cluster__existed | bool,
+          'immutable_drift': ocp_hcp_kubevirt_cluster__drift,
+          'hosted_cluster': ocp_hcp_kubevirt_cluster__hc | infra.automation_development_office.hcp_kubevirt_hostedcluster_status,
+          'nodepools': ocp_hcp_kubevirt_cluster__nodepools | map('infra.automation_development_office.hcp_kubevirt_nodepool_status') | list,
+          'access': ocp_hcp_kubevirt_cluster__hc | infra.automation_development_office.hcp_kubevirt_access_summary(ocp_hcp_kubevirt_cluster__mgmt_apps_domain),
+          'apps_load_balancer_ip': ocp_hcp_kubevirt_cluster__apps_lb_ip | default(''),
+          'pending_dns': ocp_hcp_kubevirt_cluster__def.base_domain | length > 0,
+          'hosted_api_verification': ocp_hcp_kubevirt_cluster__verify | default({})
+        }]
+      }}
+
+- name: Shift on Shift deploy | Summary | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.debug:
+    msg: "{{ ocp_hcp_kubevirt_cluster_results | last }}"

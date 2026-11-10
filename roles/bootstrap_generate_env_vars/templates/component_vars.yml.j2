@@ -694,6 +694,30 @@ ocp_networking_ingress:
 ocp_networking_load_balancing:
 {{ net_cfg.load_balancing | default({}) | to_nice_yaml(indent=2) | indent(2, first=true) }}
 
+{% elif component_name == 'shift_on_shift' %}
+{% set sos_cfg = bootstrap_generate_env_vars_preflight.component_config.shift_on_shift | default({}) if bootstrap_generate_env_vars_preflight is defined else {} %}
+{% set sos_clusters = sos_cfg.clusters | default([]) | map('dict2items') | map('rejectattr', 'key', 'equalto', 'pull_secret') | map('items2dict') | list %}
+# Shift on Shift: hosted control planes on OpenShift Virtualization.
+# Definitions for infra.automation_development_office.ocp_hcp_kubevirt_cluster.
+# No secrets here: pull secrets for pull_secret_source=vault are in
+# vault_shift_on_shift.yml.
+shift_on_shift_clusters:
+{{ sos_clusters | to_nice_yaml(indent=2) | indent(2, first=true) }}
+shift_on_shift_cluster_defaults:
+{{ sos_cfg.cluster_defaults | default({}) | to_nice_yaml(indent=2) | indent(2, first=true) }}
+# Deploy installs missing prerequisites first: multicluster engine Operator,
+# OpenShift Virtualization, MetalLB (with the address pools below), and
+# wildcard route admission. Existing installations are reused.
+shift_on_shift_install_prerequisites: {{ sos_cfg.install_prerequisites | default(false) | bool | lower }}
+shift_on_shift_metallb_address_pools: {{ sos_cfg.metallb_address_pools | default([]) | to_json }}
+# Explicit opt-in to patch the default IngressController for wildcard routes.
+shift_on_shift_manage_wildcard_route_admission: {{ sos_cfg.manage_wildcard_route_admission | default(false) | bool | lower }}
+# Lab-only: report a non bare metal management cluster as UNSUPPORTED instead of failing.
+shift_on_shift_allow_unsupported_platform: {{ sos_cfg.allow_unsupported_platform | default(false) | bool | lower }}
+shift_on_shift_load_balancer_check: {{ sos_cfg.load_balancer_check | default('metallb') | to_json }}
+shift_on_shift_validate_before_deploy: {{ sos_cfg.validate_before_deploy | default(true) | bool | lower }}
+shift_on_shift_verify_hosted_api: {{ sos_cfg.verify_hosted_api | default(true) | bool | lower }}
+
 {% else %}
 # No default vars for this component yet.
 {% endif %}

@@ -1,0 +1,223 @@
+---
+# yamllint disable rule:line-length
+# Example least-privilege RBAC for a Shift on Shift automation service account.
+# A starting point: review against your policies before use. Replace
+# <automation-namespace> and the hosted cluster namespace (clusters).
+#
+# What each part is for:
+#   shift-on-shift-read      cluster-scoped reads for prerequisite validation
+#   shift-on-shift-hosted    writes for HostedCluster/NodePool lifecycle
+#   pull-secret reader       copy openshift-config/pull-secret (pull_secret_source=management_cluster)
+#   wildcard route opt-in    only if "Allow wildcard route admission" is used
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: shift-on-shift
+  namespace: <automation-namespace>
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: shift-on-shift-read
+rules:
+  - apiGroups: [config.openshift.io]
+    resources: [clusterversions, clusteroperators, infrastructures, networks, images, imagedigestmirrorsets]
+    verbs: [get, list]
+  - apiGroups: [operator.openshift.io]
+    resources: [imagecontentsourcepolicies, ingresscontrollers]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [nodes, pods, namespaces]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [configmaps]   # hypershift/supported-versions, kube-system/cluster-config-v1 (FIPS check)
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments]  # hypershift/operator
+    verbs: [get, list]
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get]
+  - apiGroups: [multicluster.openshift.io]
+    resources: [multiclusterengines]
+    verbs: [get, list]
+  - apiGroups: [cluster.open-cluster-management.io]
+    resources: [managedclusters]
+    verbs: [get, list]
+  - apiGroups: [addon.open-cluster-management.io]
+    resources: [managedclusteraddons]
+    verbs: [get, list]
+  - apiGroups: [hypershift.openshift.io]
+    resources: [hostedclusters, nodepools]
+    verbs: [get, list]
+  - apiGroups: [hco.kubevirt.io]
+    resources: [hyperconvergeds]
+    verbs: [get, list]
+  - apiGroups: [cdi.kubevirt.io]
+    resources: [storageprofiles]
+    verbs: [get, list]
+  - apiGroups: [storage.k8s.io]
+    resources: [storageclasses]
+    verbs: [get, list]
+  - apiGroups: [snapshot.storage.k8s.io]
+    resources: [volumesnapshotclasses]
+    verbs: [get, list]
+  - apiGroups: [metallb.io]
+    resources: [metallbs, ipaddresspools, l2advertisements, bgpadvertisements]
+    verbs: [get, list]
+  - apiGroups: [console.openshift.io]
+    resources: [consoleclidownloads]
+    verbs: [get]
+  # Creating a namespace for hosted clusters (skip when it is pre-created).
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [create, delete]
+  # Deleting the auto-imported managed cluster on hosted cluster deletion.
+  - apiGroups: [cluster.open-cluster-management.io]
+    resources: [managedclusters]
+    verbs: [delete]
+  # Custom base domain: the <name>-apps Service lives in the <namespace>-<name>
+  # control plane namespace that HyperShift creates, so it needs cluster scope.
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [get, list, create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: shift-on-shift-read
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: shift-on-shift-read
+subjects:
+  - kind: ServiceAccount
+    name: shift-on-shift
+    namespace: <automation-namespace>
+---
+# Hosted cluster namespace writes (repeat per hosted cluster namespace).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: shift-on-shift-hosted
+  namespace: clusters
+rules:
+  - apiGroups: [hypershift.openshift.io]
+    resources: [hostedclusters, nodepools]
+    verbs: [get, list, create, patch, delete]
+  - apiGroups: [""]
+    resources: [secrets, configmaps]
+    verbs: [get, list, create, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: shift-on-shift-hosted
+  namespace: clusters
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: shift-on-shift-hosted
+subjects:
+  - kind: ServiceAccount
+    name: shift-on-shift
+    namespace: <automation-namespace>
+---
+# Read only the management cluster pull secret.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: shift-on-shift-pull-secret
+  namespace: openshift-config
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [pull-secret]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: shift-on-shift-pull-secret
+  namespace: openshift-config
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: shift-on-shift-pull-secret
+subjects:
+  - kind: ServiceAccount
+    name: shift-on-shift
+    namespace: <automation-namespace>
+---
+# Optional: only for the explicit wildcard route admission opt-in.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: shift-on-shift-wildcard-routes
+  namespace: openshift-ingress-operator
+rules:
+  - apiGroups: [operator.openshift.io]
+    resources: [ingresscontrollers]
+    resourceNames: [default]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: shift-on-shift-wildcard-routes
+  namespace: openshift-ingress-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: shift-on-shift-wildcard-routes
+subjects:
+  - kind: ServiceAccount
+    name: shift-on-shift
+    namespace: <automation-namespace>
+---
+# Optional: only when deploy installs missing prerequisites
+# (install_prerequisites). Cluster-scoped because the operators install into
+# their own namespaces (multicluster-engine, openshift-cnv, metallb-system).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: shift-on-shift-install-prerequisites
+rules:
+  - apiGroups: [packages.operators.coreos.com]
+    resources: [packagemanifests]
+    verbs: [get, list]
+  - apiGroups: [operators.coreos.com]
+    resources: [subscriptions, operatorgroups, clusterserviceversions]
+    verbs: [get, list, create, patch]
+  - apiGroups: [multicluster.openshift.io]
+    resources: [multiclusterengines]
+    verbs: [get, list, create]
+  - apiGroups: [operator.open-cluster-management.io]
+    resources: [multiclusterhubs]
+    verbs: [get, list]
+  - apiGroups: [hco.kubevirt.io]
+    resources: [hyperconvergeds]
+    verbs: [get, list, create]
+  - apiGroups: [metallb.io]
+    resources: [metallbs, ipaddresspools, l2advertisements]
+    verbs: [get, list, create, patch]
+  - apiGroups: [operator.openshift.io]
+    resources: [ingresscontrollers]
+    resourceNames: [default]
+    verbs: [get, patch]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: shift-on-shift-install-prerequisites
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: shift-on-shift-install-prerequisites
+subjects:
+  - kind: ServiceAccount
+    name: shift-on-shift
+    namespace: <automation-namespace>

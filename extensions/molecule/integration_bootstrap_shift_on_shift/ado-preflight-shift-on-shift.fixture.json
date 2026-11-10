@@ -1,0 +1,72 @@
+{
+  "scm_tool": "gitlab",
+  "environment": "molecule",
+  "domain": "example.test",
+  "component": "openshift",
+  "components": ["openshift"],
+  "platform": ["openshift"],
+  "component_apps": {
+    "openshift": ["shift_on_shift"]
+  },
+  "component_options": {
+    "openshift": []
+  },
+  "openshift": {
+    "api_host": "https://api.mgmt.example.test:6443",
+    "apps_domain": "apps.mgmt.example.test",
+    "token": "MOLECULE_FAKE_OPENSHIFT_TOKEN",
+    "skip_tls_verify": true
+  },
+  "component_config": {
+    "shift_on_shift": {
+      "install_prerequisites": true,
+      "metallb_address_pools": ["192.0.2.240-192.0.2.250"],
+      "manage_wildcard_route_admission": true,
+      "load_balancer_check": "metallb",
+      "clusters": [
+        {
+          "name": "tenant-a",
+          "namespace": "clusters",
+          "release_image": "quay.io/openshift-release-dev/ocp-release:4.22.0-multi",
+          "pull_secret_source": "management_cluster",
+          "worker_count": 2,
+          "worker_cores": 4,
+          "worker_memory": "16Gi",
+          "root_volume_size": "64Gi",
+          "root_volume_storage_class": "molecule-rwx-block",
+          "etcd_storage_class": "molecule-lvms",
+          "require_live_migration": true
+        },
+        {
+          "name": "tenant-b",
+          "namespace": "clusters",
+          "release_image": "quay.io/openshift-release-dev/ocp-release:4.21.3-multi",
+          "pull_secret_source": "vault",
+          "pull_secret": "{\"auths\":{\"quay.io\":{\"auth\":\"TU9MRUNVTEU6RkFLRQ==\"}}}",
+          "base_domain": "tenants.example.test",
+          "api_publishing": "LoadBalancer",
+          "worker_count": 3
+        }
+      ]
+    }
+  },
+  "aap": {
+    "enabled": true,
+    "hostname": "https://aap.example.test",
+    "version": "26",
+    "organization": "ado-lab",
+    "inventory": "ado-inventory",
+    "project": "ado-project",
+    "git_url": "https://git.example.test/sample.git",
+    "git_branch": "main",
+    "execution_environment": "ee-supported-rhel9",
+    "vault_credential_name": "ado-vault",
+    "oauth_token": "MOLECULE_FAKE_TOKEN",
+    "admin_username": "admin",
+    "admin_password": "molecule-fake-password",
+    "vault_password": "molecule-fake-vault-password"
+  },
+  "jira": {
+    "enabled": false
+  }
+}

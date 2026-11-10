@@ -1,0 +1,27 @@
+---
+# yamllint disable rule:line-length
+# Only runs when the operator explicitly opted in. The default hosted ingress
+# (*.apps.<name>.<management apps domain>) needs wildcard route admission.
+- name: Shift on Shift | Read default IngressController
+  kubernetes.core.k8s_info:
+    api_version: operator.openshift.io/v1
+    kind: IngressController
+    name: default
+    namespace: openshift-ingress-operator
+  register: ocp_hcp_kubevirt_cluster__ingress
+
+- name: Shift on Shift | Allow wildcard routes on the default IngressController
+  kubernetes.core.k8s:
+    state: patched
+    definition:
+      apiVersion: operator.openshift.io/v1
+      kind: IngressController
+      metadata:
+        name: default
+        namespace: openshift-ingress-operator
+      spec:
+        routeAdmission:
+          wildcardPolicy: WildcardsAllowed
+  when: >-
+    ((ocp_hcp_kubevirt_cluster__ingress.resources | default([]) | first) | default({}, true)).spec.routeAdmission.wildcardPolicy
+    | default('WildcardsDisallowed') != 'WildcardsAllowed'

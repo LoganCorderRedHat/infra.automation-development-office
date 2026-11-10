@@ -1,0 +1,88 @@
+---
+# yamllint disable rule:line-length
+# Read-only. Only k8s_info reads and SelfSubjectAccessReviews (evaluated by
+# the API server, never stored) are sent to the management cluster.
+- name: Shift on Shift prereqs | Normalize hosted cluster definitions
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_prereqs__definitions: >-
+      {{
+        ocp_hcp_kubevirt_prereqs_clusters
+        | infra.automation_development_office.hcp_kubevirt_cluster_definitions(
+            ocp_hcp_kubevirt_prereqs_cluster_defaults,
+            ocp_hcp_kubevirt_prereqs_cluster_name
+          )
+      }}
+
+- name: Shift on Shift prereqs | Fail on invalid hosted cluster definitions
+  ansible.builtin.assert:
+    that:
+      - ocp_hcp_kubevirt_prereqs__definitions.clusters | length > 0
+      - ocp_hcp_kubevirt_prereqs__definitions.errors | length == 0
+    fail_msg: >-
+      Hosted cluster definition problems:
+      {{
+        (ocp_hcp_kubevirt_prereqs__definitions.errors | join('; '))
+        if ocp_hcp_kubevirt_prereqs__definitions.errors
+        else 'no hosted clusters are defined (ocp_hcp_kubevirt_prereqs_clusters)'
+      }}
+    quiet: true
+
+- name: Shift on Shift prereqs | Gather management cluster facts
+  ansible.builtin.include_tasks: gather.yml
+  when: ocp_hcp_kubevirt_prereqs_facts | length == 0
+
+- name: Shift on Shift prereqs | Use supplied facts
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_prereqs__facts: "{{ ocp_hcp_kubevirt_prereqs_facts }}"
+  when: ocp_hcp_kubevirt_prereqs_facts | length > 0
+
+- name: Shift on Shift prereqs | Evaluate prerequisites
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_prereqs_report: >-
+      {{
+        ocp_hcp_kubevirt_prereqs__facts
+        | infra.automation_development_office.hcp_kubevirt_prereq_report(
+            ocp_hcp_kubevirt_prereqs__definitions.clusters,
+            {
+              'allow_unsupported_platform': ocp_hcp_kubevirt_prereqs_allow_unsupported_platform | bool,
+              'wildcard_remediation_planned': ocp_hcp_kubevirt_prereqs_wildcard_remediation_planned | bool,
+              'install_planned': ocp_hcp_kubevirt_prereqs_install_planned,
+              'metallb_address_pools': ocp_hcp_kubevirt_prereqs_metallb_address_pools,
+              'load_balancer_check': ocp_hcp_kubevirt_prereqs_load_balancer_check,
+              'check_capacity': ocp_hcp_kubevirt_prereqs_check_capacity | bool,
+              'min_workers': ocp_hcp_kubevirt_prereqs_min_workers | int,
+              'sizing': ocp_hcp_kubevirt_prereqs_sizing,
+              'control_plane_pods': ocp_hcp_kubevirt_prereqs_control_plane_pods | int
+            },
+            ocp_hcp_kubevirt_prereqs_support_matrix
+          )
+      }}
+
+- name: Shift on Shift prereqs | Report
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        ocp_hcp_kubevirt_prereqs_report
+        | infra.automation_development_office.hcp_kubevirt_prereq_summary_lines
+      }}
+
+- name: Shift on Shift prereqs | Write JSON report
+  ansible.builtin.copy:
+    content: "{{ ocp_hcp_kubevirt_prereqs_report | to_nice_json }}"
+    dest: "{{ ocp_hcp_kubevirt_prereqs_report_path }}"
+    mode: "0600"
+  when: ocp_hcp_kubevirt_prereqs_report_path | length > 0
+
+- name: Shift on Shift prereqs | Fail when required prerequisites are missing
+  ansible.builtin.fail:
+    msg: >-
+      {{ ocp_hcp_kubevirt_prereqs_report.summary.required_failed }} required
+      prerequisite(s) missing:
+      {{
+        ocp_hcp_kubevirt_prereqs_report.missing
+        | map(attribute='message')
+        | join('; ')
+      }}
+  when:
+    - ocp_hcp_kubevirt_prereqs_fail_on_missing | bool
+    - not ocp_hcp_kubevirt_prereqs_report.ready

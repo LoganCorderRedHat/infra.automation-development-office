@@ -1,0 +1,25 @@
+---
+- name: Cleanup generated bootstrap shift_on_shift molecule content
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  tasks:
+    - name: Remove generated molecule artifacts
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/{{ item }}"
+        state: absent
+      loop:
+        - playbooks
+        - configs
+        - group_vars
+        - inventory
+        - collections
+        - templates
+        - alerts
+        - dashboards
+        - ansible.cfg
+        - .component-catalog.json
+        - component-run-plan.json
+        - local_components.py
+        - ado-preflight-shift-on-shift.json

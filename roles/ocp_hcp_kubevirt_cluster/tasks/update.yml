@@ -1,0 +1,317 @@
+---
+# yamllint disable rule:line-length
+# Supported in-place changes: update channel, node pool autoRepair, control
+# plane release, then node pool release (documented order: management
+# cluster, multicluster engine Operator, hosted control plane, node pools).
+- name: Shift on Shift update | Look up current state
+  ansible.builtin.include_tasks: lookup.yml
+
+- name: Shift on Shift update | Require the hosted cluster | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.assert:
+    that:
+      - ocp_hcp_kubevirt_cluster__hc | length > 0
+    fail_msg: >-
+      HostedCluster {{ ocp_hcp_kubevirt_cluster__def.namespace }}/{{ ocp_hcp_kubevirt_cluster__def.name }} not found.
+    quiet: true
+
+- name: Shift on Shift update | Resolve request | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  vars:
+    ocp_hcp_kubevirt_cluster__hc_status: "{{ ocp_hcp_kubevirt_cluster__hc | infra.automation_development_office.hcp_kubevirt_hostedcluster_status }}"
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__hc_version: >-
+      {{
+        ocp_hcp_kubevirt_cluster__hc_status.completed_version
+        or (ocp_hcp_kubevirt_cluster__hc.spec.release.image | infra.automation_development_office.hcp_kubevirt_parse_version)
+      }}
+    # A rollout (installation or update) that has not reached Completed.
+    ocp_hcp_kubevirt_cluster__cp_rollout: >-
+      {{
+        ocp_hcp_kubevirt_cluster__hc_status.version
+        if ocp_hcp_kubevirt_cluster__hc_status.version_state | length > 0
+        and ocp_hcp_kubevirt_cluster__hc_status.version_state != 'Completed' else ''
+      }}
+    ocp_hcp_kubevirt_cluster__pools_in_scope: >-
+      {{
+        ocp_hcp_kubevirt_cluster__nodepools
+        | selectattr('metadata.name', 'equalto', ocp_hcp_kubevirt_cluster_nodepool_name)
+        | list
+        if ocp_hcp_kubevirt_cluster_nodepool_name | length > 0 else ocp_hcp_kubevirt_cluster__nodepools
+      }}
+    ocp_hcp_kubevirt_cluster__want_channel: >-
+      {{
+        ocp_hcp_kubevirt_cluster_channel | length > 0
+        and ocp_hcp_kubevirt_cluster_channel != (ocp_hcp_kubevirt_cluster__hc.spec.channel | default(''))
+      }}
+    ocp_hcp_kubevirt_cluster__want_auto_repair: "{{ ocp_hcp_kubevirt_cluster_auto_repair | string | lower in ['true', 'false'] }}"
+    ocp_hcp_kubevirt_cluster__want_cp: >-
+      {{
+        ocp_hcp_kubevirt_cluster_target_release_image | length > 0
+        and ocp_hcp_kubevirt_cluster_target_release_image != ocp_hcp_kubevirt_cluster__hc.spec.release.image
+      }}
+    ocp_hcp_kubevirt_cluster__want_np: "{{ ocp_hcp_kubevirt_cluster_update_nodepools | bool }}"
+
+- name: Shift on Shift update | Nothing requested | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.debug:
+    msg: >-
+      No update requested (channel, auto_repair, target_release_image, or update_nodepools).
+  when:
+    - not ocp_hcp_kubevirt_cluster__want_channel | bool
+    - not ocp_hcp_kubevirt_cluster__want_auto_repair | bool
+    - not ocp_hcp_kubevirt_cluster__want_cp | bool
+    - not ocp_hcp_kubevirt_cluster__want_np | bool
+
+- name: Shift on Shift update | Set update channel | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  kubernetes.core.k8s:
+    state: patched
+    definition:
+      apiVersion: hypershift.openshift.io/v1beta1
+      kind: HostedCluster
+      metadata:
+        name: "{{ ocp_hcp_kubevirt_cluster__def.name }}"
+        namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+      spec:
+        channel: "{{ ocp_hcp_kubevirt_cluster_channel }}"
+  when: ocp_hcp_kubevirt_cluster__want_channel | bool
+
+- name: Shift on Shift update | Set NodePool autoRepair
+  kubernetes.core.k8s:
+    state: patched
+    definition:
+      apiVersion: hypershift.openshift.io/v1beta1
+      kind: NodePool
+      metadata:
+        name: "{{ item.metadata.name }}"
+        namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+      spec:
+        management:
+          autoRepair: "{{ ocp_hcp_kubevirt_cluster_auto_repair | bool }}"
+  loop: "{{ ocp_hcp_kubevirt_cluster__pools_in_scope }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+  when:
+    - ocp_hcp_kubevirt_cluster__want_auto_repair | bool
+    - item.spec.management.autoRepair | default(false) | bool != ocp_hcp_kubevirt_cluster_auto_repair | bool
+
+- name: Shift on Shift update | Update the hosted control plane release
+  when: ocp_hcp_kubevirt_cluster__want_cp | bool
+  block:
+    - name: Shift on Shift update | Read management cluster version, MCE, and supported versions
+      kubernetes.core.k8s_info:
+        api_version: "{{ item.api_version }}"
+        kind: "{{ item.kind }}"
+        name: "{{ item.name | default(omit) }}"
+        namespace: "{{ item.namespace | default(omit) }}"
+      loop:
+        - {api_version: config.openshift.io/v1, kind: ClusterVersion, name: version}
+        - {api_version: multicluster.openshift.io/v1, kind: MultiClusterEngine}
+        - {api_version: v1, kind: ConfigMap, name: supported-versions, namespace: hypershift}
+      loop_control:
+        label: "{{ item.kind }}"
+      register: ocp_hcp_kubevirt_cluster__update_ctx
+
+    - name: Shift on Shift update | Evaluate compatibility and ordering | {{ ocp_hcp_kubevirt_cluster__def.name }}
+      vars:
+        ocp_hcp_kubevirt_cluster__mgmt_version: "{{ ((ocp_hcp_kubevirt_cluster__update_ctx.results[0].resources | first) | default({}, true)).status.desired.version | default('') }}"
+        ocp_hcp_kubevirt_cluster__mce: "{{ ocp_hcp_kubevirt_cluster__update_ctx.results[1].resources | default([]) | infra.automation_development_office.hcp_kubevirt_mce_facts }}"
+        ocp_hcp_kubevirt_cluster__supported: >-
+          {{
+            ((((ocp_hcp_kubevirt_cluster__update_ctx.results[2].resources | first) | default({}, true)).data | default({}))['supported-versions']
+              | default('{"versions": []}') | from_json).versions | default([])
+          }}
+      ansible.builtin.set_fact:
+        ocp_hcp_kubevirt_cluster__target_version: >-
+          {{
+            ocp_hcp_kubevirt_cluster_target_version | infra.automation_development_office.hcp_kubevirt_parse_version
+            or (ocp_hcp_kubevirt_cluster_target_release_image | infra.automation_development_office.hcp_kubevirt_parse_version)
+          }}
+        ocp_hcp_kubevirt_cluster__cp_check: >-
+          {{
+            ocp_hcp_kubevirt_cluster__hc_version
+            | infra.automation_development_office.hcp_kubevirt_upgrade_check(
+                (ocp_hcp_kubevirt_cluster_target_version | infra.automation_development_office.hcp_kubevirt_parse_version)
+                or (ocp_hcp_kubevirt_cluster_target_release_image | infra.automation_development_office.hcp_kubevirt_parse_version),
+                ocp_hcp_kubevirt_cluster__supported,
+                ocp_hcp_kubevirt_cluster__nodepools | map('infra.automation_development_office.hcp_kubevirt_nodepool_status') | map(attribute='version') | select | list,
+                'controlplane'
+              )
+          }}
+        ocp_hcp_kubevirt_cluster__matrix_check: >-
+          {{
+            ocp_hcp_kubevirt_cluster__mgmt_version
+            | infra.automation_development_office.hcp_kubevirt_support_check(
+                ocp_hcp_kubevirt_cluster__mce.version | default(''),
+                (ocp_hcp_kubevirt_cluster_target_version | infra.automation_development_office.hcp_kubevirt_parse_version)
+                or (ocp_hcp_kubevirt_cluster_target_release_image | infra.automation_development_office.hcp_kubevirt_parse_version),
+                ocp_hcp_kubevirt_cluster_support_matrix
+              )
+          }}
+
+    - name: Shift on Shift update | Collect blocking errors | {{ ocp_hcp_kubevirt_cluster__def.name }}
+      ansible.builtin.set_fact:
+        ocp_hcp_kubevirt_cluster__cp_errors: >-
+          {{
+            ocp_hcp_kubevirt_cluster__cp_check.errors
+            + (ocp_hcp_kubevirt_cluster__matrix_check.findings | rejectattr('ok') | map(attribute='message') | list)
+            + (['control plane rollout to ' ~ ocp_hcp_kubevirt_cluster__cp_rollout ~ ' has not completed']
+               if ocp_hcp_kubevirt_cluster__cp_rollout | length > 0 else [])
+          }}
+
+    - name: Shift on Shift update | Report update plan | {{ ocp_hcp_kubevirt_cluster__def.name }}
+      ansible.builtin.debug:
+        msg:
+          from: "{{ ocp_hcp_kubevirt_cluster__hc_version }}"
+          to: "{{ ocp_hcp_kubevirt_cluster__target_version }}"
+          errors: "{{ ocp_hcp_kubevirt_cluster__cp_errors }}"
+          warnings: "{{ ocp_hcp_kubevirt_cluster__cp_check.warnings }}"
+
+    - name: Shift on Shift update | Enforce supported versions and explicit confirmation | {{ ocp_hcp_kubevirt_cluster__def.name }}
+      ansible.builtin.assert:
+        that:
+          - ocp_hcp_kubevirt_cluster__cp_errors | length == 0
+          - ocp_hcp_kubevirt_cluster_confirm_update | bool
+        fail_msg: >-
+          Control plane update of {{ ocp_hcp_kubevirt_cluster__def.name }} to
+          {{ ocp_hcp_kubevirt_cluster__target_version | default('unknown', true) }} was not started.
+          Errors: {{ ocp_hcp_kubevirt_cluster__cp_errors | join('; ') or 'none' }}.
+          {{ '' if ocp_hcp_kubevirt_cluster_confirm_update | bool else 'Set ocp_hcp_kubevirt_cluster_confirm_update=true to proceed.' }}
+        quiet: true
+
+    - name: Shift on Shift update | Add force-upgrade-to annotation (operator chose force) | {{ ocp_hcp_kubevirt_cluster__def.name }}
+      kubernetes.core.k8s:
+        state: patched
+        definition:
+          apiVersion: hypershift.openshift.io/v1beta1
+          kind: HostedCluster
+          metadata:
+            name: "{{ ocp_hcp_kubevirt_cluster__def.name }}"
+            namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+            annotations:
+              hypershift.openshift.io/force-upgrade-to: "{{ ocp_hcp_kubevirt_cluster_target_release_image }}"
+      when: ocp_hcp_kubevirt_cluster_force_upgrade | bool
+
+    - name: Shift on Shift update | Set control plane release image | {{ ocp_hcp_kubevirt_cluster__def.name }}
+      kubernetes.core.k8s:
+        state: patched
+        definition:
+          apiVersion: hypershift.openshift.io/v1beta1
+          kind: HostedCluster
+          metadata:
+            name: "{{ ocp_hcp_kubevirt_cluster__def.name }}"
+            namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+          spec:
+            release:
+              image: "{{ ocp_hcp_kubevirt_cluster_target_release_image }}"
+
+    - name: Shift on Shift update | Wait for the control plane update to complete | {{ ocp_hcp_kubevirt_cluster__def.name }}
+      kubernetes.core.k8s_info:
+        api_version: hypershift.openshift.io/v1beta1
+        kind: HostedCluster
+        name: "{{ ocp_hcp_kubevirt_cluster__def.name }}"
+        namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+      register: ocp_hcp_kubevirt_cluster__cp_wait
+      until: >-
+        ((ocp_hcp_kubevirt_cluster__cp_wait.resources | first).status.version.history | default([{}]) | first).image | default('')
+        == ocp_hcp_kubevirt_cluster_target_release_image
+        and ((ocp_hcp_kubevirt_cluster__cp_wait.resources | first).status.version.history | default([{}]) | first).state | default('')
+        == 'Completed'
+      retries: "{{ ((ocp_hcp_kubevirt_cluster_update_timeout_minutes | int) * 60 / (ocp_hcp_kubevirt_cluster_poll_delay | int)) | int }}"
+      delay: "{{ ocp_hcp_kubevirt_cluster_poll_delay | int }}"
+      when: ocp_hcp_kubevirt_cluster_wait | bool
+
+- name: Shift on Shift update | Update node pool releases
+  when: ocp_hcp_kubevirt_cluster__want_np | bool
+  block:
+    - name: Shift on Shift update | Re-read state before node pool update
+      ansible.builtin.include_tasks: lookup.yml
+
+    - name: Shift on Shift update | Evaluate node pool version skew | {{ ocp_hcp_kubevirt_cluster__def.name }}
+      ansible.builtin.set_fact:
+        ocp_hcp_kubevirt_cluster__np_image: "{{ ocp_hcp_kubevirt_cluster_nodepool_release_image | default('', true) or ocp_hcp_kubevirt_cluster__hc.spec.release.image }}"
+        # Measured against the last completed control plane version, never
+        # spec.release, so node pools cannot overtake a control plane update.
+        ocp_hcp_kubevirt_cluster__np_check: >-
+          {{
+            (ocp_hcp_kubevirt_cluster__hc | infra.automation_development_office.hcp_kubevirt_hostedcluster_status).completed_version
+            | infra.automation_development_office.hcp_kubevirt_upgrade_check(
+                (ocp_hcp_kubevirt_cluster_nodepool_release_image | default('', true) or ocp_hcp_kubevirt_cluster__hc.spec.release.image)
+                | infra.automation_development_office.hcp_kubevirt_parse_version
+                or (ocp_hcp_kubevirt_cluster_target_version | infra.automation_development_office.hcp_kubevirt_parse_version),
+                [], [], 'nodepool'
+              )
+          }}
+        ocp_hcp_kubevirt_cluster__pools_in_scope: >-
+          {{
+            ocp_hcp_kubevirt_cluster__nodepools
+            | selectattr('metadata.name', 'equalto', ocp_hcp_kubevirt_cluster_nodepool_name)
+            | list
+            if ocp_hcp_kubevirt_cluster_nodepool_name | length > 0 else ocp_hcp_kubevirt_cluster__nodepools
+          }}
+
+    - name: Shift on Shift update | Enforce skew policy and explicit confirmation | {{ ocp_hcp_kubevirt_cluster__def.name }}
+      ansible.builtin.assert:
+        that:
+          - ocp_hcp_kubevirt_cluster__np_check.ok
+          - ocp_hcp_kubevirt_cluster_confirm_update | bool
+          - ocp_hcp_kubevirt_cluster__pools_in_scope | length > 0
+        fail_msg: >-
+          Node pool update was not started. Errors: {{ ocp_hcp_kubevirt_cluster__np_check.errors | join('; ') or 'none' }}.
+          {{ '' if ocp_hcp_kubevirt_cluster_confirm_update | bool else 'Set ocp_hcp_kubevirt_cluster_confirm_update=true to proceed.' }}
+          {{ '' if ocp_hcp_kubevirt_cluster__pools_in_scope | length > 0 else 'No matching NodePool found.' }}
+        quiet: true
+
+    - name: Shift on Shift update | Set NodePool release image
+      kubernetes.core.k8s:
+        state: patched
+        definition:
+          apiVersion: hypershift.openshift.io/v1beta1
+          kind: NodePool
+          metadata:
+            name: "{{ item.metadata.name }}"
+            namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+          spec:
+            release:
+              image: "{{ ocp_hcp_kubevirt_cluster__np_image }}"
+      loop: "{{ ocp_hcp_kubevirt_cluster__pools_in_scope }}"
+      loop_control:
+        label: "{{ item.metadata.name }}"
+      when: item.spec.release.image | default('') != ocp_hcp_kubevirt_cluster__np_image
+
+    - name: Shift on Shift update | Wait for node pools to finish updating
+      kubernetes.core.k8s_info:
+        api_version: hypershift.openshift.io/v1beta1
+        kind: NodePool
+        name: "{{ item.metadata.name }}"
+        namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+      register: ocp_hcp_kubevirt_cluster__np_update_wait
+      until: >-
+        ((ocp_hcp_kubevirt_cluster__np_update_wait.resources | first) | infra.automation_development_office.hcp_kubevirt_nodepool_status).converged
+        and ((ocp_hcp_kubevirt_cluster__np_update_wait.resources | first) | infra.automation_development_office.hcp_kubevirt_nodepool_status).conditions.UpdatingVersion | default('False') != 'True'
+        and ((ocp_hcp_kubevirt_cluster__np_update_wait.resources | first) | infra.automation_development_office.hcp_kubevirt_nodepool_status).version
+        == (ocp_hcp_kubevirt_cluster__np_image | infra.automation_development_office.hcp_kubevirt_parse_version
+            or ((ocp_hcp_kubevirt_cluster__np_update_wait.resources | first) | infra.automation_development_office.hcp_kubevirt_nodepool_status).version)
+      retries: "{{ ((ocp_hcp_kubevirt_cluster_update_timeout_minutes | int) * 60 / (ocp_hcp_kubevirt_cluster_poll_delay | int)) | int }}"
+      delay: "{{ ocp_hcp_kubevirt_cluster_poll_delay | int }}"
+      loop: "{{ ocp_hcp_kubevirt_cluster__pools_in_scope }}"
+      loop_control:
+        label: "{{ item.metadata.name }}"
+      when: ocp_hcp_kubevirt_cluster_wait | bool
+
+- name: Shift on Shift update | Look up final state
+  ansible.builtin.include_tasks: lookup.yml
+
+- name: Shift on Shift update | Record result | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster_results: >-
+      {{
+        ocp_hcp_kubevirt_cluster_results + [{
+          'name': ocp_hcp_kubevirt_cluster__def.name,
+          'namespace': ocp_hcp_kubevirt_cluster__def.namespace,
+          'action': 'update',
+          'hosted_cluster': ocp_hcp_kubevirt_cluster__hc | infra.automation_development_office.hcp_kubevirt_hostedcluster_status,
+          'nodepools': ocp_hcp_kubevirt_cluster__nodepools | map('infra.automation_development_office.hcp_kubevirt_nodepool_status') | list
+        }]
+      }}
+
+- name: Shift on Shift update | Summary | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.debug:
+    msg: "{{ ocp_hcp_kubevirt_cluster_results | last }}"

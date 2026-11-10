@@ -1,0 +1,57 @@
+---
+- name: Generate bootstrap content for shift_on_shift
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  vars:
+    env: molecule
+    preflight_json: "{{ playbook_dir }}/ado-preflight-shift-on-shift.json"
+
+    generate_env_vars: true
+    # Preflight default (Override group_vars unchecked).
+    generate_env_vars_force: false
+    generate_playbooks: true
+    generate_aap_configs: true
+    apply_aap_configs: false
+
+    # Plain text so verify can assert the vault/vars split; real runs encrypt.
+    generate_env_vars_encrypt_vault_files: false
+    generate_env_vars_encrypt_vault: false
+    generate_env_vars_vault_encrypt: false
+    generate_env_vars_prompt_encrypt_vault_files:
+      user_input: "n"
+    generate_env_vars_prompt_encrypt_vault:
+      user_input: "n"
+
+    generate_playbook_repo_pause_for_push: false
+    generate_playbook_repo_git_push: false
+    generate_playbook_repo_git_commit: false
+
+  pre_tasks:
+    # A repo generated for an older cluster: bootstrap must follow the form.
+    - name: Create group_vars directory
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/group_vars/all/{{ env }}"
+        state: directory
+        mode: "0755"
+
+    - name: Write infra_config_vars.yml left over from an older cluster
+      ansible.builtin.copy:
+        dest: >-
+          {{ playbook_dir }}/group_vars/all/{{ env }}/infra_config_vars.yml
+        content: |
+          ---
+          api_host: "https://api.old-cluster.example.test:6443"
+          host: "https://api.old-cluster.example.test:6443"
+          apps_domain: "apps.old-cluster.example.test"
+        mode: "0644"
+
+    - name: Write OpenShift preflight JSON for shift_on_shift
+      ansible.builtin.copy:
+        src: ado-preflight-shift-on-shift.fixture.json
+        dest: "{{ preflight_json }}"
+        mode: "0644"
+
+  roles:
+    - role: infra.automation_development_office.bootstrap_controller

@@ -1,0 +1,88 @@
+---
+# yamllint disable rule:line-length
+controller_templates:
+  - name: ADO | Shift on Shift | Update hosted cluster
+    description: Update channel, autoRepair, control plane release, then node pool release
+    organization: '{{ bootstrap_controller_organization }}'
+    playbook: playbooks/shift_on_shift/ado-shift-on-shift-update-bootstrap.yml
+    inventory: '{{ bootstrap_controller_inventory_name }}'
+    project: '{{ bootstrap_controller_project_name }}'
+    execution_environment: '{{ bootstrap_controller_execution_environment_name }}'
+    credentials:
+      - '{{ bootstrap_controller_creds }}'
+    related: null
+    labels:
+      - name: ADO | bootstrap
+        organization: '{{ bootstrap_controller_organization }}'
+      - name: ADO | shift_on_shift
+        organization: '{{ bootstrap_controller_organization }}'
+    extra_vars: {}
+    survey_enabled: true
+    survey_spec:
+      name: ADO | Shift on Shift | Update hosted cluster Survey
+      description: Release changes are checked against the support matrix and need confirmation
+      spec:
+        - question_name: ADO | What environment?
+          question_description: Target environment (loads vars_shift_on_shift / vault_shift_on_shift)
+          required: true
+          type: multiplechoice
+          variable: env
+          choices: '{{ bootstrap_controller_environment_choices }}'
+          default: '{{ bootstrap_controller_default_environment }}'
+        - question_name: ADO | Hosted cluster name
+          question_description: Exactly one hosted cluster from vars_shift_on_shift.yml.
+          required: true
+          type: text
+          variable: shift_on_shift_cluster_name
+          default: ""
+        - question_name: ADO | Target release image
+          question_description: Control plane release image (for example quay.io/openshift-release-dev/ocp-release:4.22.1-multi). Empty skips the control plane update.
+          required: false
+          type: text
+          variable: shift_on_shift_target_release_image
+          default: ""
+        - question_name: ADO | Target version
+          question_description: Required only for a digest-pinned target image (for example 4.22.1).
+          required: false
+          type: text
+          variable: shift_on_shift_target_version
+          default: ""
+        - question_name: ADO | Update channel
+          question_description: For example stable-4.22. Empty leaves the channel unchanged.
+          required: false
+          type: text
+          variable: shift_on_shift_channel
+          default: ""
+        - question_name: ADO | Update node pools
+          question_description: Update node pool releases after the control plane (node pools are never newer than the control plane).
+          required: true
+          type: multiplechoice
+          variable: shift_on_shift_update_nodepools
+          choices:
+            - "false"
+            - "true"
+          default: "false"
+        - question_name: ADO | Node pool release image
+          question_description: Empty uses the hosted cluster release image.
+          required: false
+          type: text
+          variable: shift_on_shift_nodepool_release_image
+          default: ""
+        - question_name: ADO | Confirm release update
+          question_description: Must be true to change any release.
+          required: true
+          type: multiplechoice
+          variable: shift_on_shift_confirm_update
+          choices:
+            - "false"
+            - "true"
+          default: "false"
+        - question_name: ADO | Force upgrade annotation
+          question_description: Adds hypershift.openshift.io/force-upgrade-to (documented procedure). Leave false unless required.
+          required: true
+          type: multiplechoice
+          variable: shift_on_shift_force_upgrade
+          choices:
+            - "false"
+            - "true"
+          default: "false"

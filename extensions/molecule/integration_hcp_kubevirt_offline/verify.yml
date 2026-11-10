@@ -1,0 +1,125 @@
+---
+# yamllint disable rule:line-length
+- name: Verify Shift on Shift offline results
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars:
+    sos_artifacts: "{{ playbook_dir }}/.artifacts"
+
+  tasks:
+    - name: Read reports and rendered manifests
+      ansible.builtin.slurp:
+        src: "{{ sos_artifacts }}/{{ item }}"
+      loop:
+        - report_ready.json
+        - report_not_ready.json
+        - rendered/tenant-a/hostedcluster.yaml
+        - rendered/tenant-a/nodepool.yaml
+        - rendered/tenant-b/hostedcluster.yaml
+        - rendered/tenant-b/nodepool.yaml
+        - rendered/tenant-b/supporting-objects.yaml
+        - report_fresh.json
+      register: sos_reads
+
+    - name: Parse artifacts
+      ansible.builtin.set_fact:
+        sos_ready: "{{ sos_reads.results[0].content | b64decode | from_json }}"
+        sos_not_ready: "{{ sos_reads.results[1].content | b64decode | from_json }}"
+        sos_hc_a: "{{ sos_reads.results[2].content | b64decode | from_yaml }}"
+        sos_np_a: "{{ sos_reads.results[3].content | b64decode | from_yaml }}"
+        sos_hc_b: "{{ sos_reads.results[4].content | b64decode | from_yaml }}"
+        sos_np_b: "{{ sos_reads.results[5].content | b64decode | from_yaml }}"
+        sos_objects_b: "{{ sos_reads.results[6].content | b64decode | from_yaml }}"
+        sos_fresh: "{{ sos_reads.results[7].content | b64decode | from_json }}"
+        sos_all_text: "{{ sos_reads.results | map(attribute='content') | map('b64decode') | join('\n') }}"
+
+    - name: Fresh cluster report plans the installs instead of failing
+      ansible.builtin.assert:
+        that:
+          - sos_fresh.ready is true
+          - sos_fresh.summary.required_failed == 0
+          - (['mce.installed', 'hypershift.operator', 'virt.installed', 'ingress.load_balancer'] | difference(sos_fresh.planned | map(attribute='id') | list)) == []
+          - sos_fresh.install_plan.mce.channel == 'stable-2.17'
+          - sos_fresh.install_plan.metallb.address_pools == ['192.0.2.240-192.0.2.250']
+        fail_msg: "Unexpected fresh report: {{ sos_fresh.missing | map(attribute='message') | list }}"
+
+    - name: Ready cluster report has no missing prerequisites
+      ansible.builtin.assert:
+        that:
+          - sos_ready.ready is true
+          - sos_ready.summary.required_failed == 0
+          - sos_ready.checks | selectattr('id', 'equalto', 'matrix.hosted') | map(attribute='status') | unique | list == ['pass']
+          - sos_ready.checks | selectattr('id', 'equalto', 'storage.live_migration') | selectattr('cluster', 'equalto', 'tenant-a') | map(attribute='status') | list == ['pass']
+          - sos_ready.checks | selectattr('id', 'equalto', 'disconnected.mirrors') | map(attribute='status') | list == ['pass']
+        fail_msg: "Ready report unexpectedly failed: {{ sos_ready.missing | map(attribute='message') | list }}"
+
+    - name: Not-ready report names each missing prerequisite
+      vars:
+        sos_missing_ids: "{{ sos_not_ready.missing | map(attribute='id') | unique | list }}"
+        sos_expected:
+          - management.platform
+          - management.workers
+          - management.capacity
+          - network.ovn
+          - virt.installed
+          - virt.apis
+          - storage.default_class
+          - ingress.wildcard_routes
+          - ingress.load_balancer
+          - access.permissions
+          - pull_secret.valid
+          - matrix.hosted
+          - release.supported_version
+          - disconnected.mirrors
+      ansible.builtin.assert:
+        that:
+          - sos_not_ready.ready is false
+          - sos_expected | difference(sos_missing_ids) | length == 0
+          - "'network.mtu' in (sos_not_ready.optimizations | map(attribute='id') | list)"
+          - "'network.multiqueue' in (sos_not_ready.optimizations | map(attribute='id') | list)"
+          - "'matrix.management' not in sos_missing_ids"
+        fail_msg: "Missing ids {{ sos_missing_ids }} do not cover {{ sos_expected }}"
+
+    - name: Default-ingress hosted cluster renders the documented KubeVirt spec
+      ansible.builtin.assert:
+        that:
+          - sos_hc_a.apiVersion == 'hypershift.openshift.io/v1beta1'
+          - sos_hc_a.spec.platform.type == 'KubeVirt'
+          - sos_hc_a.spec.platform.kubevirt.baseDomainPassthrough is true
+          - sos_hc_a.spec.dns.baseDomain == ''
+          - sos_hc_a.spec.controllerAvailabilityPolicy == 'HighlyAvailable'
+          - sos_hc_a.spec.etcd.managed.storage.persistentVolume.storageClassName == 'molecule-lvms'
+          - sos_hc_a.spec.secretEncryption.aescbc.activeKey.name == 'tenant-a-etcd-encryption-key'
+          - sos_hc_a.spec.pullSecret.name == 'tenant-a-pull-secret'
+          - sos_hc_a.spec.services | selectattr('service', 'equalto', 'APIServer') | map(attribute='servicePublishingStrategy.type') | list == ['LoadBalancer']
+          - sos_hc_a.spec.services | selectattr('servicePublishingStrategy.type', 'equalto', 'Route') | map(attribute='service') | sort == ['Ignition', 'Konnectivity', 'OAuthServer']
+          - "sos_np_a.spec.platform.kubevirt.compute == {'cores': 4, 'memory': '16Gi', 'qosClass': 'Burstable'}"
+          - sos_np_a.spec.platform.kubevirt.rootVolume.persistent.accessModes == ['ReadWriteMany']
+          - sos_np_a.spec.platform.kubevirt.rootVolume.persistent.volumeMode == 'Block'
+          - sos_np_a.spec.platform.kubevirt.rootVolume.persistent.storageClass == 'molecule-rwx-block'
+          - sos_np_a.spec.replicas == 2
+          - sos_np_a.spec.release.image == sos_hc_a.spec.release.image
+
+    - name: Custom-domain disconnected hosted cluster renders mirrors, trust, and CSI mapping
+      ansible.builtin.assert:
+        that:
+          - sos_hc_b.spec.platform.kubevirt.baseDomainPassthrough is not defined
+          - sos_hc_b.spec.dns.baseDomain == 'tenants.example.test'
+          - sos_hc_b.spec.controllerAvailabilityPolicy == 'SingleReplica'
+          - sos_hc_b.spec.imageContentSources | length == 2
+          - sos_hc_b.spec.additionalTrustBundle.name == 'tenant-b-user-ca-bundle'
+          - sos_hc_b.spec.olmCatalogPlacement == 'guest'
+          - sos_hc_b.spec.configuration.operatorhub.disableAllDefaultSources is true
+          - sos_hc_b.spec.capabilities.disabled == ['ImageRegistry']
+          - sos_hc_b.spec.platform.kubevirt.storageDriver.type == 'Manual'
+          - "sos_hc_b.spec.platform.kubevirt.storageDriver.manual.storageClassMapping == [{'infraStorageClassName': 'molecule-rwx-block', 'guestStorageClassName': 'tenant-block'}]"
+          - sos_np_b.spec.replicas == 3
+          - sos_objects_b.apps_service == 'tenant-b-apps'
+          - sos_objects_b.secret_labels['hypershift.openshift.io/safe-to-delete-with-cluster'] == 'true'
+
+    - name: Rendered output and reports contain no pull secret material
+      ansible.builtin.assert:
+        that:
+          - "'TU9MRUNVTEU6RkFLRQ' not in sos_all_text"
+          - "'\"auth\":' not in sos_all_text"

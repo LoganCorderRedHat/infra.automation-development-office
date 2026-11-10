@@ -1,0 +1,131 @@
+---
+# yamllint disable rule:line-length
+# Readiness is decided from management-side status: HostedCluster
+# conditions, NodePool replicas, and the hosted ClusterVersion history that
+# HyperShift mirrors into HostedCluster.status.version.
+- name: Shift on Shift wait | Hosted control plane Available | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  kubernetes.core.k8s_info:
+    api_version: hypershift.openshift.io/v1beta1
+    kind: HostedCluster
+    name: "{{ ocp_hcp_kubevirt_cluster__def.name }}"
+    namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+  register: ocp_hcp_kubevirt_cluster__hc_wait
+  until: >-
+    (ocp_hcp_kubevirt_cluster__hc_wait.resources | default([]) | length > 0)
+    and (
+      ((ocp_hcp_kubevirt_cluster__hc_wait.resources | first) | infra.automation_development_office.hcp_kubevirt_hostedcluster_status).available
+      or ((ocp_hcp_kubevirt_cluster__hc_wait.resources | first) | infra.automation_development_office.hcp_kubevirt_hostedcluster_status).blocking_conditions | length > 0
+    )
+  retries: "{{ ((ocp_hcp_kubevirt_cluster_hc_timeout_minutes | int) * 60 / (ocp_hcp_kubevirt_cluster_poll_delay | int)) | int }}"
+  delay: "{{ ocp_hcp_kubevirt_cluster_poll_delay | int }}"
+  failed_when: false
+
+- name: Shift on Shift wait | Summarize control plane status | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__hc: "{{ (ocp_hcp_kubevirt_cluster__hc_wait.resources | default([]) | first) | default({}, true) }}"
+    ocp_hcp_kubevirt_cluster__hc_status: >-
+      {{
+        ((ocp_hcp_kubevirt_cluster__hc_wait.resources | default([]) | first) | default({}, true))
+        | infra.automation_development_office.hcp_kubevirt_hostedcluster_status
+      }}
+
+- name: Shift on Shift wait | Fail on invalid configuration or release | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.assert:
+    that:
+      - ocp_hcp_kubevirt_cluster__hc_status.blocking_conditions | length == 0
+    fail_msg: >-
+      HostedCluster {{ ocp_hcp_kubevirt_cluster__def.name }} reports blocking conditions:
+      {{
+        ocp_hcp_kubevirt_cluster__hc_status.blocking_conditions | to_json
+      }}.
+      Fix the cause (release image, pull secret, configuration) and rerun; the
+      HostedCluster is left in place for inspection.
+    quiet: true
+
+- name: Shift on Shift wait | Fail when the control plane is not Available | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.assert:
+    that:
+      - ocp_hcp_kubevirt_cluster__hc_status.available
+    fail_msg: >-
+      HostedCluster {{ ocp_hcp_kubevirt_cluster__def.name }} did not report Available within
+      {{ ocp_hcp_kubevirt_cluster_hc_timeout_minutes }} minutes. Conditions:
+      {{ ocp_hcp_kubevirt_cluster__hc_status.conditions | to_json }}.
+      Inspect pods in {{ ocp_hcp_kubevirt_cluster__def.hcp_namespace }}; rerunning resumes waiting.
+    quiet: true
+
+- name: Shift on Shift wait | NodePool replicas Ready | {{ ocp_hcp_kubevirt_cluster__def.nodepool.name }}
+  kubernetes.core.k8s_info:
+    api_version: hypershift.openshift.io/v1beta1
+    kind: NodePool
+    name: "{{ ocp_hcp_kubevirt_cluster__def.nodepool.name }}"
+    namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+  register: ocp_hcp_kubevirt_cluster__np_wait
+  until: >-
+    (ocp_hcp_kubevirt_cluster__np_wait.resources | default([]) | length > 0)
+    and ((ocp_hcp_kubevirt_cluster__np_wait.resources | first) | infra.automation_development_office.hcp_kubevirt_nodepool_status).converged
+  retries: "{{ ((ocp_hcp_kubevirt_cluster_nodepool_timeout_minutes | int) * 60 / (ocp_hcp_kubevirt_cluster_poll_delay | int)) | int }}"
+  delay: "{{ ocp_hcp_kubevirt_cluster_poll_delay | int }}"
+  failed_when: false
+  when: ocp_hcp_kubevirt_cluster__def.nodepool.replicas != 0
+
+- name: Shift on Shift wait | Summarize NodePool status | {{ ocp_hcp_kubevirt_cluster__def.nodepool.name }}
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__np_status: >-
+      {{
+        ((ocp_hcp_kubevirt_cluster__np_wait.resources | default([]) | first) | default({}, true))
+        | infra.automation_development_office.hcp_kubevirt_nodepool_status
+      }}
+  when: ocp_hcp_kubevirt_cluster__def.nodepool.replicas != 0
+
+- name: Shift on Shift wait | Fail when worker VMs did not join | {{ ocp_hcp_kubevirt_cluster__def.nodepool.name }}
+  ansible.builtin.assert:
+    that:
+      - ocp_hcp_kubevirt_cluster__np_status.converged
+    fail_msg: >-
+      NodePool {{ ocp_hcp_kubevirt_cluster__def.nodepool.name }} has
+      {{ ocp_hcp_kubevirt_cluster__np_status.current_replicas }} of
+      {{ ocp_hcp_kubevirt_cluster__np_status.desired_replicas | default('autoscaling', true) }} ready replicas after
+      {{ ocp_hcp_kubevirt_cluster_nodepool_timeout_minutes }} minutes. Conditions:
+      {{ ocp_hcp_kubevirt_cluster__np_status.conditions | to_json }}.
+      Check VirtualMachines in {{ ocp_hcp_kubevirt_cluster__def.hcp_namespace }} and storage capacity.
+    quiet: true
+  when: ocp_hcp_kubevirt_cluster__def.nodepool.replicas != 0
+
+# With a custom base domain the rollout completes only after DNS exists, so
+# only the default (passthrough) ingress waits for the version rollout.
+- name: Shift on Shift wait | Hosted cluster version rollout Completed | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  kubernetes.core.k8s_info:
+    api_version: hypershift.openshift.io/v1beta1
+    kind: HostedCluster
+    name: "{{ ocp_hcp_kubevirt_cluster__def.name }}"
+    namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+  register: ocp_hcp_kubevirt_cluster__hc_version
+  until: >-
+    ((ocp_hcp_kubevirt_cluster__hc_version.resources | default([]) | first) | default({}, true)
+     | infra.automation_development_office.hcp_kubevirt_hostedcluster_status).version_state == 'Completed'
+  retries: "{{ ((ocp_hcp_kubevirt_cluster_version_timeout_minutes | int) * 60 / (ocp_hcp_kubevirt_cluster_poll_delay | int)) | int }}"
+  delay: "{{ ocp_hcp_kubevirt_cluster_poll_delay | int }}"
+  failed_when: false
+  when:
+    - ocp_hcp_kubevirt_cluster__def.base_domain_passthrough | bool
+    - ocp_hcp_kubevirt_cluster__def.nodepool.replicas != 0
+
+- name: Shift on Shift wait | Fail when the hosted cluster version did not complete | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  vars:
+    ocp_hcp_kubevirt_cluster__final: >-
+      {{
+        (ocp_hcp_kubevirt_cluster__hc_version.resources | default([]) | first) | default({}, true)
+        | infra.automation_development_office.hcp_kubevirt_hostedcluster_status
+      }}
+  ansible.builtin.assert:
+    that:
+      - ocp_hcp_kubevirt_cluster__final.version_state == 'Completed'
+    fail_msg: >-
+      Hosted cluster {{ ocp_hcp_kubevirt_cluster__def.name }} version rollout is
+      '{{ ocp_hcp_kubevirt_cluster__final.version_state | default('unknown', true) }}' after
+      {{ ocp_hcp_kubevirt_cluster_version_timeout_minutes }} minutes. Check cluster operators in the
+      hosted cluster (oc get co) and wildcard route admission on the management cluster.
+    quiet: true
+  when:
+    - ocp_hcp_kubevirt_cluster__def.base_domain_passthrough | bool
+    - ocp_hcp_kubevirt_cluster__def.nodepool.replicas != 0

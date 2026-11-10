@@ -1,0 +1,41 @@
+---
+# yamllint disable rule:line-length
+- name: Shift on Shift live | Verify readiness and access details
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Collect status
+      ansible.builtin.include_role:
+        name: infra.automation_development_office.ocp_hcp_kubevirt_cluster
+      vars:
+        ocp_hcp_kubevirt_cluster_action: status
+        ocp_hcp_kubevirt_cluster_clusters: "{{ sos_live_clusters }}"
+
+    - name: Assert the hosted cluster is operational
+      vars:
+        sos_result: "{{ ocp_hcp_kubevirt_cluster_results | first }}"
+      ansible.builtin.assert:
+        that:
+          - sos_result.exists
+          - sos_result.hosted_cluster.available
+          - sos_result.hosted_cluster.version_state == 'Completed'
+          - sos_result.hosted_cluster.api_url | length > 0
+          - sos_result.nodepools | length == 1
+          - sos_result.nodepools[0].converged
+          - sos_result.immutable_drift | length == 0
+          - sos_result.access.kubeconfig_secret.name | length > 0
+        fail_msg: "{{ sos_result }}"
+
+    - name: Scale to three workers and back to two
+      ansible.builtin.include_role:
+        name: infra.automation_development_office.ocp_hcp_kubevirt_cluster
+      vars:
+        ocp_hcp_kubevirt_cluster_action: scale
+        ocp_hcp_kubevirt_cluster_clusters: "{{ sos_live_clusters }}"
+        ocp_hcp_kubevirt_cluster_name: "{{ sos_live_name }}"
+        ocp_hcp_kubevirt_cluster_replicas: "{{ item }}"
+      loop: [3, 2]

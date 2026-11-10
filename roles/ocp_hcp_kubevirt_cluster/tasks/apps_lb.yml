@@ -1,0 +1,95 @@
+---
+# yamllint disable rule:line-length
+# Custom base domain only (docs: "Setting up the load balancer"): a
+# LoadBalancer Service in the hosted control plane namespace forwards 443/80
+# to the hosted router NodePorts on the worker VMs.
+- name: Shift on Shift apps LB | Read the hosted router NodePorts
+  block:
+    - name: Shift on Shift apps LB | Prepare hosted API connection
+      ansible.builtin.include_tasks: hosted_api_auth.yml
+
+    - name: Shift on Shift apps LB | Read hosted router NodePort service | {{ ocp_hcp_kubevirt_cluster__def.name }}
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ ocp_hcp_kubevirt_cluster__hosted_kubeconfig }}"
+        context: "{{ ocp_hcp_kubevirt_cluster__hosted_auth.context }}"
+        host: "{{ ocp_hcp_kubevirt_cluster__hosted_auth.host }}"
+        api_key: "{{ ocp_hcp_kubevirt_cluster__hosted_auth.api_key }}"
+        validate_certs: "{{ ocp_hcp_kubevirt_cluster__hosted_auth.validate_certs }}"
+        ca_cert: "{{ ocp_hcp_kubevirt_cluster__hosted_ca_file | default(omit, true) }}"
+        api_version: v1
+        kind: Service
+        name: router-nodeport-default
+        namespace: openshift-ingress
+      register: ocp_hcp_kubevirt_cluster__router_np
+      until: ocp_hcp_kubevirt_cluster__router_np.resources | default([]) | length > 0
+      retries: 20
+      delay: 30
+      no_log: true
+  always:
+    - name: Shift on Shift apps LB | Clean up hosted API connection
+      ansible.builtin.include_tasks: hosted_api_cleanup.yml
+
+- name: Shift on Shift apps LB | Resolve router NodePorts | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__router_ports: >-
+      {{
+        dict(
+          (ocp_hcp_kubevirt_cluster__router_np.resources | first).spec.ports | map(attribute='name')
+          | zip((ocp_hcp_kubevirt_cluster__router_np.resources | first).spec.ports | map(attribute='nodePort'))
+        )
+      }}
+
+- name: Shift on Shift apps LB | Create apps LoadBalancer service | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: "{{ ocp_hcp_kubevirt_cluster__def.name }}-apps"
+        namespace: "{{ ocp_hcp_kubevirt_cluster__def.hcp_namespace }}"
+        labels:
+          app: "{{ ocp_hcp_kubevirt_cluster__def.name }}"
+          app.kubernetes.io/managed-by: infra.automation_development_office
+          app.kubernetes.io/part-of: shift-on-shift
+          app.kubernetes.io/instance: "{{ ocp_hcp_kubevirt_cluster__def.name }}"
+      spec:
+        type: LoadBalancer
+        selector:
+          kubevirt.io: virt-launcher
+        ports:
+          - name: https-443
+            port: 443
+            protocol: TCP
+            targetPort: "{{ ocp_hcp_kubevirt_cluster__router_ports.https | int }}"
+          - name: http-80
+            port: 80
+            protocol: TCP
+            targetPort: "{{ ocp_hcp_kubevirt_cluster__router_ports.http | int }}"
+
+- name: Shift on Shift apps LB | Wait for load balancer address | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Service
+    name: "{{ ocp_hcp_kubevirt_cluster__def.name }}-apps"
+    namespace: "{{ ocp_hcp_kubevirt_cluster__def.hcp_namespace }}"
+  register: ocp_hcp_kubevirt_cluster__apps_svc
+  until: (((ocp_hcp_kubevirt_cluster__apps_svc.resources | first).status.loadBalancer.ingress | default([])) | length) > 0
+  retries: 20
+  delay: 15
+
+- name: Shift on Shift apps LB | Record load balancer address | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__apps_lb_ip: >-
+      {{
+        ((ocp_hcp_kubevirt_cluster__apps_svc.resources | first).status.loadBalancer.ingress | first).ip
+        | default(((ocp_hcp_kubevirt_cluster__apps_svc.resources | first).status.loadBalancer.ingress | first).hostname | default(''))
+      }}
+
+- name: Shift on Shift apps LB | DNS action required | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.debug:
+    msg: >-
+      Create a wildcard DNS record *.apps.{{ ocp_hcp_kubevirt_cluster__def.name }}.{{ ocp_hcp_kubevirt_cluster__def.base_domain }}
+      -> {{ ocp_hcp_kubevirt_cluster__apps_lb_ip }} and an API record
+      api.{{ ocp_hcp_kubevirt_cluster__def.name }}.{{ ocp_hcp_kubevirt_cluster__def.base_domain }}
+      -> the APIServer load balancer address. The HostedCluster reports Partial until DNS resolves.

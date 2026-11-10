@@ -61,6 +61,7 @@ bootstrap_generate_playbook_repo_component_map:
     - ocp_descheduler
     - ocp_virtualization
     - openshift_networking
+    - shift_on_shift
     - mtv
     - openshift
     - quay
@@ -634,6 +635,48 @@ bootstrap_generate_playbook_repo_generated_playbooks:
     target_platform: openshift
     category: platform
     app: openshift_networking
+
+  - src: shift_on_shift/ado-shift-on-shift-validate-bootstrap.yml
+    dest: playbooks/shift_on_shift/ado-shift-on-shift-validate-bootstrap.yml
+    target_platform: openshift
+    category: platform
+    app: shift_on_shift
+
+  - src: shift_on_shift/ado-shift-on-shift-deploy-bootstrap.yml
+    dest: playbooks/shift_on_shift/ado-shift-on-shift-deploy-bootstrap.yml
+    target_platform: openshift
+    category: platform
+    app: shift_on_shift
+
+  - src: shift_on_shift/ado-shift-on-shift-status-bootstrap.yml
+    dest: playbooks/shift_on_shift/ado-shift-on-shift-status-bootstrap.yml
+    target_platform: openshift
+    category: platform
+    app: shift_on_shift
+
+  - src: shift_on_shift/ado-shift-on-shift-scale-bootstrap.yml
+    dest: playbooks/shift_on_shift/ado-shift-on-shift-scale-bootstrap.yml
+    target_platform: openshift
+    category: platform
+    app: shift_on_shift
+
+  - src: shift_on_shift/ado-shift-on-shift-update-bootstrap.yml
+    dest: playbooks/shift_on_shift/ado-shift-on-shift-update-bootstrap.yml
+    target_platform: openshift
+    category: platform
+    app: shift_on_shift
+
+  - src: shift_on_shift/ado-shift-on-shift-access-bootstrap.yml
+    dest: playbooks/shift_on_shift/ado-shift-on-shift-access-bootstrap.yml
+    target_platform: openshift
+    category: platform
+    app: shift_on_shift
+
+  - src: shift_on_shift/ado-shift-on-shift-delete-bootstrap.yml
+    dest: playbooks/shift_on_shift/ado-shift-on-shift-delete-bootstrap.yml
+    target_platform: openshift
+    category: platform
+    app: shift_on_shift
 
   - src: mtv/ado-deploy-bootstrap.yml
     dest: playbooks/mtv/ado-deploy-bootstrap.yml

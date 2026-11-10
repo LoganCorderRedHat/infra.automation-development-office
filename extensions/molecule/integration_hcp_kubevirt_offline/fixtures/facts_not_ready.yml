@@ -1,0 +1,43 @@
+---
+# yamllint disable rule:line-length
+# Management cluster with missing prerequisites: OCP 4.18 + MCE 2.10, vSphere,
+# two workers, OpenShift SDN, no OpenShift Virtualization, no default storage,
+# no MetalLB, wildcard routes disallowed, denied permissions, bad pull secret.
+crds: {hostedclusters: true, nodepools: true, mce: true, hco: false, kubevirt: false, cdi: false, storageprofiles: false,
+       managedclusters: true, managedclusteraddons: true, metallb: false, ipaddresspools: false, l2advertisements: false,
+       bgpadvertisements: false, idms: true, icsp: true, volumesnapshotclasses: true, consoleclidownloads: true}
+clusterversion: {version: 4.18.20, available: true, progressing: false, failing: false}
+clusteroperators:
+  - {name: kube-apiserver, available: true, degraded: false}
+infrastructure: {platform: VSphere, control_plane_topology: HighlyAvailable}
+network: {type: OpenShiftSDN, mtu: 1450}
+nodes:
+  - {name: w1, worker: true, control_plane: false, ready: true, schedulable: true, cpu_allocatable_m: 8000, memory_allocatable_b: 34359738368, pods_allocatable: 250, zone: ""}
+  - {name: w2, worker: true, control_plane: false, ready: true, schedulable: true, cpu_allocatable_m: 8000, memory_allocatable_b: 34359738368, pods_allocatable: 250, zone: ""}
+pod_requests:
+  w1: {cpu_m: 6000, memory_b: 25769803776, pods: 200}
+  w2: {cpu_m: 6000, memory_b: 25769803776, pods: 200}
+mce: {present: true, name: multiclusterengine, version: 2.10.2, phase: Available, hypershift_enabled: true, hypershift_local_hosting_enabled: true}
+hypershift_operator: {present: true, available: true}
+supported_versions: ["4.20", "4.19", "4.18"]
+local_cluster: {present: true}
+managed_clusters: [local-cluster]
+hypershift_addon: {checked: true, available: true}
+existing_hostedclusters: []
+cnv: {present: false}
+storage_classes:
+  - {name: thin-csi, provisioner: vsphere.csi.example.test, default: false}
+storage_profiles: {}
+volume_snapshot_classes: []
+ingress: {wildcard_policy: WildcardsDisallowed, default_domain: apps.mgmt.example.test}
+metallb: {instance_present: false, pools: 0, advertisements: 0}
+mirror_sources: []
+image_additional_trusted_ca: false
+fips_enabled: false
+hcp_cli_download: false
+pull_secrets:
+  tenant-a: {valid: true, registries: [quay.io], error: ""}
+  tenant-b: {valid: false, registries: [], error: "pull secret is not valid JSON"}
+access:
+  "create hostedclusters.hypershift.openshift.io in clusters": false
+  "create nodepools.hypershift.openshift.io in clusters": true

@@ -1,0 +1,47 @@
+---
+# yamllint disable rule:line-length
+# Two hosted clusters that exercise the main input paths. No real secrets.
+sos_offline_clusters:
+  - name: tenant-a
+    namespace: clusters
+    release_image: quay.io/openshift-release-dev/ocp-release:4.22.0-multi
+    pull_secret_source: management_cluster
+    controller_availability_policy: HighlyAvailable
+    worker_count: 2
+    worker_cores: 4
+    worker_memory: 16Gi
+    root_volume_size: 64Gi
+    root_volume_storage_class: molecule-rwx-block
+    etcd_storage_class: molecule-lvms
+    require_live_migration: true
+  - name: tenant-b
+    namespace: clusters
+    release_image: mirror.example.test:5000/openshift/release-images@sha256:1111111111111111111111111111111111111111111111111111111111111111
+    hosted_version: 4.21.3
+    pull_secret_source: vault
+    base_domain: tenants.example.test
+    controller_availability_policy: SingleReplica
+    worker_count: 3
+    network_multiqueue: Enable
+    storage_class_mappings:
+      - infra_storage_class: molecule-rwx-block
+        guest_storage_class: tenant-block
+    capabilities_disabled:
+      - ImageRegistry
+    disconnected:
+      enabled: true
+      image_content_sources:
+        - source: quay.io/openshift-release-dev/ocp-release
+          mirrors:
+            - mirror.example.test:5000/openshift/release-images
+        - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+          mirrors:
+            - mirror.example.test:5000/openshift/release
+      additional_trust_bundle: |
+        -----BEGIN CERTIFICATE-----
+        TU9MRUNVTEUgRkFLRSBDQQ==
+        -----END CERTIFICATE-----
+      olm_catalog_placement: guest
+      disable_default_sources: true
+sos_offline_pull_secrets:
+  tenant-b: '{"auths": {"mirror.example.test:5000": {"auth": "TU9MRUNVTEU6RkFLRQ=="}}}'

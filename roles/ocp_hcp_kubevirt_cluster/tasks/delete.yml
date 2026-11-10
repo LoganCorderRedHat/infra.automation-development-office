@@ -1,0 +1,156 @@
+---
+# yamllint disable rule:line-length
+# Destructive. Runs only for an explicitly named hosted cluster whose name is
+# typed again in ocp_hcp_kubevirt_cluster_confirm_delete. Follows the
+# documented order: managed cluster, then HostedCluster (HyperShift removes
+# node pools, VMs, and the control plane namespace), then ADO-created objects.
+- name: Shift on Shift delete | Require typed confirmation | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.assert:
+    that:
+      - ocp_hcp_kubevirt_cluster_name | length > 0
+      - ocp_hcp_kubevirt_cluster_confirm_delete == ocp_hcp_kubevirt_cluster__def.name
+    fail_msg: >-
+      Refusing to delete. Set ocp_hcp_kubevirt_cluster_name and type the same hosted cluster
+      name in ocp_hcp_kubevirt_cluster_confirm_delete ('{{ ocp_hcp_kubevirt_cluster__def.name }}').
+    quiet: true
+
+- name: Shift on Shift delete | Look up current state
+  ansible.builtin.include_tasks: lookup.yml
+
+- name: Shift on Shift delete | Read managed cluster | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  kubernetes.core.k8s_info:
+    api_version: cluster.open-cluster-management.io/v1
+    kind: ManagedCluster
+    name: "{{ ocp_hcp_kubevirt_cluster__def.name }}"
+  register: ocp_hcp_kubevirt_cluster__mc
+
+- name: Shift on Shift delete | Classify managed cluster | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__mc_obj: "{{ (ocp_hcp_kubevirt_cluster__mc.resources | default([]) | first) | default({}, true) }}"
+
+# Only the auto-imported hosted cluster entry is removed; an unrelated managed
+# cluster that happens to share the name is left alone.
+- name: Shift on Shift delete | Delete the imported managed cluster | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  kubernetes.core.k8s:
+    state: absent
+    api_version: cluster.open-cluster-management.io/v1
+    kind: ManagedCluster
+    name: "{{ ocp_hcp_kubevirt_cluster__def.name }}"
+    wait: true
+    wait_timeout: 600
+  when:
+    - ocp_hcp_kubevirt_cluster__mc_obj | length > 0
+    - >-
+      (ocp_hcp_kubevirt_cluster__mc_obj.metadata.annotations | default({}))['open-cluster-management/created-via'] | default('') == 'hypershift'
+      or (ocp_hcp_kubevirt_cluster__mc_obj.metadata.annotations | default({}))['import.open-cluster-management.io/klusterlet-deploy-mode'] | default('') == 'Hosted'
+
+- name: Shift on Shift delete | Note an unrelated managed cluster | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.debug:
+    msg: >-
+      ManagedCluster {{ ocp_hcp_kubevirt_cluster__def.name }} was not created by the hosted cluster
+      import and was left in place.
+  when:
+    - ocp_hcp_kubevirt_cluster__mc_obj | length > 0
+    - (ocp_hcp_kubevirt_cluster__mc_obj.metadata.annotations | default({}))['open-cluster-management/created-via'] | default('') != 'hypershift'
+    - (ocp_hcp_kubevirt_cluster__mc_obj.metadata.annotations | default({}))['import.open-cluster-management.io/klusterlet-deploy-mode'] | default('') != 'Hosted'
+
+- name: Shift on Shift delete | Delete HostedCluster | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  kubernetes.core.k8s:
+    state: absent
+    api_version: hypershift.openshift.io/v1beta1
+    kind: HostedCluster
+    name: "{{ ocp_hcp_kubevirt_cluster__def.name }}"
+    namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+    wait: true
+    wait_sleep: "{{ ocp_hcp_kubevirt_cluster_poll_delay | int }}"
+    wait_timeout: "{{ (ocp_hcp_kubevirt_cluster_delete_timeout_minutes | int) * 60 }}"
+  when: ocp_hcp_kubevirt_cluster__hc | length > 0
+
+- name: Shift on Shift delete | Read ADO-created supporting objects | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: "{{ item.kind }}"
+    name: "{{ item.name }}"
+    namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+  loop: >-
+    {{
+      [
+        {'kind': 'Secret', 'name': (ocp_hcp_kubevirt_cluster__def | infra.automation_development_office.hcp_kubevirt_supporting_objects).pull_secret},
+        {'kind': 'Secret', 'name': (ocp_hcp_kubevirt_cluster__def | infra.automation_development_office.hcp_kubevirt_supporting_objects).ssh_key_secret},
+        {'kind': 'Secret', 'name': (ocp_hcp_kubevirt_cluster__def | infra.automation_development_office.hcp_kubevirt_supporting_objects).etcd_encryption_secret},
+        {'kind': 'ConfigMap', 'name': (ocp_hcp_kubevirt_cluster__def | infra.automation_development_office.hcp_kubevirt_supporting_objects).trust_bundle_configmap}
+      ]
+      | selectattr('name') | list
+    }}
+  loop_control:
+    label: "{{ item.kind }}/{{ item.name }}"
+  register: ocp_hcp_kubevirt_cluster__support_reads
+  no_log: true
+
+- name: Shift on Shift delete | Delete ADO-created supporting objects | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: "{{ item.item.kind }}"
+    name: "{{ item.item.name }}"
+    namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+  loop: "{{ ocp_hcp_kubevirt_cluster__support_reads.results }}"
+  loop_control:
+    label: "{{ item.item.kind }}/{{ item.item.name }}"
+  when:
+    - item.resources | default([]) | length > 0
+    - ((item.resources | first).metadata.labels | default({}))['app.kubernetes.io/managed-by'] | default('') == 'infra.automation_development_office'
+    - ((item.resources | first).metadata.labels | default({}))['app.kubernetes.io/instance'] | default('') == ocp_hcp_kubevirt_cluster__def.name
+
+- name: Shift on Shift delete | Remove the namespace when ADO owns it and it is empty
+  when: ocp_hcp_kubevirt_cluster_delete_namespace | bool
+  block:
+    - name: Shift on Shift delete | Read namespace and remaining hosted clusters | {{ ocp_hcp_kubevirt_cluster__def.namespace }}
+      kubernetes.core.k8s_info:
+        api_version: "{{ item.api_version }}"
+        kind: "{{ item.kind }}"
+        name: "{{ item.name | default(omit) }}"
+        namespace: "{{ item.namespace | default(omit) }}"
+      loop:
+        - {api_version: v1, kind: Namespace, name: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"}
+        - {api_version: hypershift.openshift.io/v1beta1, kind: HostedCluster, namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"}
+      loop_control:
+        label: "{{ item.kind }}"
+      register: ocp_hcp_kubevirt_cluster__ns_reads
+
+    - name: Shift on Shift delete | Delete namespace | {{ ocp_hcp_kubevirt_cluster__def.namespace }}
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: Namespace
+        name: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+      when:
+        - ocp_hcp_kubevirt_cluster__ns_reads.results[0].resources | default([]) | length > 0
+        - (((ocp_hcp_kubevirt_cluster__ns_reads.results[0].resources | first).metadata.labels | default({}))['app.kubernetes.io/managed-by'] | default('')) == 'infra.automation_development_office'
+        - ocp_hcp_kubevirt_cluster__ns_reads.results[1].resources | default([]) | length == 0
+
+- name: Shift on Shift delete | Confirm HostedCluster is gone | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  kubernetes.core.k8s_info:
+    api_version: hypershift.openshift.io/v1beta1
+    kind: HostedCluster
+    name: "{{ ocp_hcp_kubevirt_cluster__def.name }}"
+    namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+  register: ocp_hcp_kubevirt_cluster__gone
+  failed_when: ocp_hcp_kubevirt_cluster__gone.resources | default([]) | length > 0
+
+- name: Shift on Shift delete | Record result | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster_results: >-
+      {{
+        ocp_hcp_kubevirt_cluster_results + [{
+          'name': ocp_hcp_kubevirt_cluster__def.name,
+          'namespace': ocp_hcp_kubevirt_cluster__def.namespace,
+          'action': 'delete',
+          'deleted': ocp_hcp_kubevirt_cluster__hc | length > 0,
+          'existed': ocp_hcp_kubevirt_cluster__hc | length > 0
+        }]
+      }}
+
+- name: Shift on Shift delete | Summary | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.debug:
+    msg: "{{ ocp_hcp_kubevirt_cluster_results | last }}"

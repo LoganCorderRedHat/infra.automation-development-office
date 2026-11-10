@@ -1268,6 +1268,15 @@ components_defaults:
     component_display_name: "OpenShift Networking"
     skip_operator_install: true
 
+  # Shift on Shift — hosted control planes (HyperShift) on OpenShift
+  # Virtualization. No operator install: the playbooks validate MCE/HyperShift
+  # and OpenShift Virtualization and manage HostedCluster/NodePool resources.
+  shift_on_shift:
+    name_space: ""
+    component_name: shift_on_shift
+    component_display_name: "Shift on Shift (hosted control planes on Virt)"
+    skip_operator_install: true
+
   # Kubernetes NMState Operator — physical node networking
   kubernetes_nmstate:
     name_space: openshift-nmstate

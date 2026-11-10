@@ -1,0 +1,3 @@
+---
+bugfixes:
+  - ocp_metallb_install - create the MetalLB OperatorGroup in AllNamespaces mode; the MetalLB Operator does not support OwnNamespace, so the CSV failed with UnsupportedOperatorGroup.

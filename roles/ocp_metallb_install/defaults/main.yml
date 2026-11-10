@@ -12,3 +12,6 @@ ocp_metallb_config:
   bgp_peers: []
   bgp_advertisements: []
 ocp_metallb_wait_timeout: 300
+# Set false when the MetalLB Operator is already subscribed; the role then
+# only creates the MetalLB instance, pools, and advertisements.
+ocp_metallb_install_operator: true

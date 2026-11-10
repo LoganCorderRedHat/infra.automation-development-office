@@ -1,0 +1,113 @@
+---
+# yamllint disable rule:line-length
+# Changes only NodePool replicas or autoScaling. With no requested values it
+# reports and makes no changes.
+- name: Shift on Shift scale | Look up current state
+  ansible.builtin.include_tasks: lookup.yml
+
+- name: Shift on Shift scale | Resolve request | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__pool_name: "{{ ocp_hcp_kubevirt_cluster_nodepool_name | default('', true) or ocp_hcp_kubevirt_cluster__def.nodepool.name }}"
+    ocp_hcp_kubevirt_cluster__want_replicas: "{{ ocp_hcp_kubevirt_cluster_replicas | string | trim | length > 0 }}"
+    ocp_hcp_kubevirt_cluster__want_autoscaling: "{{ ocp_hcp_kubevirt_cluster_autoscaling_max | string | trim | length > 0 }}"
+
+- name: Shift on Shift scale | Nothing requested | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.debug:
+    msg: >-
+      No scale change requested. Set ocp_hcp_kubevirt_cluster_replicas, or
+      ocp_hcp_kubevirt_cluster_autoscaling_min and ocp_hcp_kubevirt_cluster_autoscaling_max.
+  when:
+    - not ocp_hcp_kubevirt_cluster__want_replicas | bool
+    - not ocp_hcp_kubevirt_cluster__want_autoscaling | bool
+
+- name: Shift on Shift scale | Apply requested change
+  when: ocp_hcp_kubevirt_cluster__want_replicas | bool or ocp_hcp_kubevirt_cluster__want_autoscaling | bool
+  block:
+    - name: Shift on Shift scale | Validate request | {{ ocp_hcp_kubevirt_cluster__def.name }}
+      ansible.builtin.assert:
+        that:
+          - ocp_hcp_kubevirt_cluster__hc | length > 0
+          - ocp_hcp_kubevirt_cluster__nodepools | selectattr('metadata.name', 'equalto', ocp_hcp_kubevirt_cluster__pool_name) | list | length == 1
+          - not (ocp_hcp_kubevirt_cluster__want_replicas | bool and ocp_hcp_kubevirt_cluster__want_autoscaling | bool)
+          - not ocp_hcp_kubevirt_cluster__want_replicas | bool or (ocp_hcp_kubevirt_cluster_replicas | int(-1)) >= 0
+          - >-
+            not ocp_hcp_kubevirt_cluster__want_autoscaling | bool
+            or ((ocp_hcp_kubevirt_cluster_autoscaling_min | int(0)) >= 1
+                and (ocp_hcp_kubevirt_cluster_autoscaling_max | int(0)) >= (ocp_hcp_kubevirt_cluster_autoscaling_min | int(0)))
+        fail_msg: >-
+          Scale request for {{ ocp_hcp_kubevirt_cluster__def.name }} is invalid. The HostedCluster and NodePool
+          '{{ ocp_hcp_kubevirt_cluster__pool_name }}' must exist; set either replicas (0 or more) or
+          autoscaling min (1 or more, scale from zero is AWS only) and max (>= min), not both.
+        quiet: true
+
+    - name: Shift on Shift scale | Select NodePool | {{ ocp_hcp_kubevirt_cluster__pool_name }}
+      ansible.builtin.set_fact:
+        ocp_hcp_kubevirt_cluster__pool: "{{ ocp_hcp_kubevirt_cluster__nodepools | selectattr('metadata.name', 'equalto', ocp_hcp_kubevirt_cluster__pool_name) | first }}"
+
+    - name: Shift on Shift scale | Set replicas | {{ ocp_hcp_kubevirt_cluster__pool_name }}
+      kubernetes.core.k8s_json_patch:
+        api_version: hypershift.openshift.io/v1beta1
+        kind: NodePool
+        name: "{{ ocp_hcp_kubevirt_cluster__pool_name }}"
+        namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+        patch: >-
+          {{
+            ([{'op': 'remove', 'path': '/spec/autoScaling'}] if ocp_hcp_kubevirt_cluster__pool.spec.autoScaling is defined else [])
+            + [{'op': 'add', 'path': '/spec/replicas', 'value': ocp_hcp_kubevirt_cluster_replicas | int}]
+          }}
+      when:
+        - ocp_hcp_kubevirt_cluster__want_replicas | bool
+        - >-
+          ocp_hcp_kubevirt_cluster__pool.spec.autoScaling is defined
+          or (ocp_hcp_kubevirt_cluster__pool.spec.replicas | default(-1)) != (ocp_hcp_kubevirt_cluster_replicas | int)
+
+    - name: Shift on Shift scale | Set autoscaling | {{ ocp_hcp_kubevirt_cluster__pool_name }}
+      kubernetes.core.k8s_json_patch:
+        api_version: hypershift.openshift.io/v1beta1
+        kind: NodePool
+        name: "{{ ocp_hcp_kubevirt_cluster__pool_name }}"
+        namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+        patch: >-
+          {{
+            ([{'op': 'remove', 'path': '/spec/replicas'}] if ocp_hcp_kubevirt_cluster__pool.spec.replicas is defined else [])
+            + [{'op': 'add', 'path': '/spec/autoScaling',
+                'value': {'min': ocp_hcp_kubevirt_cluster_autoscaling_min | int, 'max': ocp_hcp_kubevirt_cluster_autoscaling_max | int}}]
+          }}
+      when:
+        - ocp_hcp_kubevirt_cluster__want_autoscaling | bool
+        - >-
+          ocp_hcp_kubevirt_cluster__pool.spec.autoScaling | default({}) !=
+          {'min': ocp_hcp_kubevirt_cluster_autoscaling_min | int, 'max': ocp_hcp_kubevirt_cluster_autoscaling_max | int}
+
+    - name: Shift on Shift scale | Wait for NodePool to converge | {{ ocp_hcp_kubevirt_cluster__pool_name }}
+      kubernetes.core.k8s_info:
+        api_version: hypershift.openshift.io/v1beta1
+        kind: NodePool
+        name: "{{ ocp_hcp_kubevirt_cluster__pool_name }}"
+        namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+      register: ocp_hcp_kubevirt_cluster__scale_wait
+      until: ((ocp_hcp_kubevirt_cluster__scale_wait.resources | first) | infra.automation_development_office.hcp_kubevirt_nodepool_status).converged
+      retries: "{{ ((ocp_hcp_kubevirt_cluster_nodepool_timeout_minutes | int) * 60 / (ocp_hcp_kubevirt_cluster_poll_delay | int)) | int }}"
+      delay: "{{ ocp_hcp_kubevirt_cluster_poll_delay | int }}"
+      when:
+        - ocp_hcp_kubevirt_cluster_wait | bool
+        - not (ocp_hcp_kubevirt_cluster__want_replicas | bool and (ocp_hcp_kubevirt_cluster_replicas | int) == 0)
+
+    - name: Shift on Shift scale | Look up final state
+      ansible.builtin.include_tasks: lookup.yml
+
+    - name: Shift on Shift scale | Record result | {{ ocp_hcp_kubevirt_cluster__def.name }}
+      ansible.builtin.set_fact:
+        ocp_hcp_kubevirt_cluster_results: >-
+          {{
+            ocp_hcp_kubevirt_cluster_results + [{
+              'name': ocp_hcp_kubevirt_cluster__def.name,
+              'namespace': ocp_hcp_kubevirt_cluster__def.namespace,
+              'action': 'scale',
+              'nodepools': ocp_hcp_kubevirt_cluster__nodepools | map('infra.automation_development_office.hcp_kubevirt_nodepool_status') | list
+            }]
+          }}
+
+    - name: Shift on Shift scale | Summary | {{ ocp_hcp_kubevirt_cluster__def.name }}
+      ansible.builtin.debug:
+        msg: "{{ ocp_hcp_kubevirt_cluster_results | last }}"

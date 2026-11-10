@@ -1,0 +1,11 @@
+---
+- name: Cleanup Shift on Shift offline artifacts
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  tasks:
+    - name: Remove rendered manifests and reports
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/.artifacts"
+        state: absent

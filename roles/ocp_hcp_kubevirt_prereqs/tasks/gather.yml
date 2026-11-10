@@ -1,0 +1,333 @@
+---
+# yamllint disable rule:line-length
+# Read-only fact gathering. Optional components are queried only after their
+# CRD is confirmed, so a missing operator is reported instead of crashing.
+- name: Shift on Shift prereqs | Probe API resources
+  kubernetes.core.k8s_info:
+    api_version: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    name: "{{ item.value }}"
+  loop: "{{ ocp_hcp_kubevirt_prereqs__crd_names | dict2items }}"
+  loop_control:
+    label: "{{ item.value }}"
+  register: ocp_hcp_kubevirt_prereqs__crd_probe
+
+- name: Shift on Shift prereqs | Record served APIs
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_prereqs__crds: >-
+      {{
+        dict(
+          ocp_hcp_kubevirt_prereqs__crd_probe.results | map(attribute='item.key')
+          | zip(
+              ocp_hcp_kubevirt_prereqs__crd_probe.results
+              | map(attribute='resources') | map('length') | map('bool')
+            )
+        )
+      }}
+
+- name: Shift on Shift prereqs | Read ClusterVersion
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: ClusterVersion
+    name: version
+  register: ocp_hcp_kubevirt_prereqs__cv
+
+- name: Shift on Shift prereqs | Read ClusterOperators
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: ClusterOperator
+  register: ocp_hcp_kubevirt_prereqs__co
+
+- name: Shift on Shift prereqs | Read Infrastructure and Network config
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: "{{ item }}"
+    name: cluster
+  loop:
+    - Infrastructure
+    - Network
+    - Image
+  register: ocp_hcp_kubevirt_prereqs__config
+
+- name: Shift on Shift prereqs | Read nodes
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Node
+  register: ocp_hcp_kubevirt_prereqs__nodes
+
+- name: Shift on Shift prereqs | Read scheduled pod requests
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    field_selectors:
+      - status.phase!=Succeeded
+      - status.phase!=Failed
+  register: ocp_hcp_kubevirt_prereqs__pods
+  when: ocp_hcp_kubevirt_prereqs_check_capacity | bool
+
+- name: Shift on Shift prereqs | Summarize pod requests
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_prereqs__pod_requests: >-
+      {{
+        (ocp_hcp_kubevirt_prereqs__pods.resources | default([]))
+        | infra.automation_development_office.hcp_kubevirt_pod_requests
+      }}
+
+- name: Shift on Shift prereqs | Drop raw pod list
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_prereqs__pods: {}
+
+- name: Shift on Shift prereqs | Read MultiClusterEngine
+  kubernetes.core.k8s_info:
+    api_version: multicluster.openshift.io/v1
+    kind: MultiClusterEngine
+  register: ocp_hcp_kubevirt_prereqs__mce
+  when: ocp_hcp_kubevirt_prereqs__crds.mce
+
+- name: Shift on Shift prereqs | Read HyperShift Operator
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: operator
+    namespace: "{{ ocp_hcp_kubevirt_prereqs_hypershift_namespace }}"
+  register: ocp_hcp_kubevirt_prereqs__ho
+
+- name: Shift on Shift prereqs | Read HyperShift supported versions
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: ConfigMap
+    name: supported-versions
+    namespace: "{{ ocp_hcp_kubevirt_prereqs_hypershift_namespace }}"
+  register: ocp_hcp_kubevirt_prereqs__supported
+
+- name: Shift on Shift prereqs | Read managed clusters
+  kubernetes.core.k8s_info:
+    api_version: cluster.open-cluster-management.io/v1
+    kind: ManagedCluster
+  register: ocp_hcp_kubevirt_prereqs__managed
+  when: ocp_hcp_kubevirt_prereqs__crds.managedclusters
+
+- name: Shift on Shift prereqs | Read hypershift-addon
+  kubernetes.core.k8s_info:
+    api_version: addon.open-cluster-management.io/v1alpha1
+    kind: ManagedClusterAddOn
+    name: hypershift-addon
+    namespace: local-cluster
+  register: ocp_hcp_kubevirt_prereqs__addon
+  when: ocp_hcp_kubevirt_prereqs__crds.managedclusteraddons
+
+- name: Shift on Shift prereqs | Read existing hosted clusters
+  kubernetes.core.k8s_info:
+    api_version: hypershift.openshift.io/v1beta1
+    kind: HostedCluster
+  register: ocp_hcp_kubevirt_prereqs__hcs
+  when: ocp_hcp_kubevirt_prereqs__crds.hostedclusters
+
+- name: Shift on Shift prereqs | Read HyperConverged
+  kubernetes.core.k8s_info:
+    api_version: hco.kubevirt.io/v1beta1
+    kind: HyperConverged
+    name: "{{ ocp_hcp_kubevirt_prereqs_hco_name }}"
+    namespace: "{{ ocp_hcp_kubevirt_prereqs_cnv_namespace }}"
+  register: ocp_hcp_kubevirt_prereqs__hco
+  when: ocp_hcp_kubevirt_prereqs__crds.hco
+
+- name: Shift on Shift prereqs | Read storage classes
+  kubernetes.core.k8s_info:
+    api_version: storage.k8s.io/v1
+    kind: StorageClass
+  register: ocp_hcp_kubevirt_prereqs__sc
+
+- name: Shift on Shift prereqs | Read CDI storage profiles
+  kubernetes.core.k8s_info:
+    api_version: cdi.kubevirt.io/v1beta1
+    kind: StorageProfile
+  register: ocp_hcp_kubevirt_prereqs__sp
+  when: ocp_hcp_kubevirt_prereqs__crds.storageprofiles
+
+- name: Shift on Shift prereqs | Read volume snapshot classes
+  kubernetes.core.k8s_info:
+    api_version: snapshot.storage.k8s.io/v1
+    kind: VolumeSnapshotClass
+  register: ocp_hcp_kubevirt_prereqs__vsc
+  when: ocp_hcp_kubevirt_prereqs__crds.volumesnapshotclasses
+
+- name: Shift on Shift prereqs | Read default IngressController
+  kubernetes.core.k8s_info:
+    api_version: operator.openshift.io/v1
+    kind: IngressController
+    name: default
+    namespace: openshift-ingress-operator
+  register: ocp_hcp_kubevirt_prereqs__ingress
+
+- name: Shift on Shift prereqs | Read MetalLB resources
+  kubernetes.core.k8s_info:
+    api_version: metallb.io/v1beta1
+    kind: "{{ item.kind }}"
+  loop:
+    - {key: metallb, kind: MetalLB}
+    - {key: ipaddresspools, kind: IPAddressPool}
+    - {key: l2advertisements, kind: L2Advertisement}
+    - {key: bgpadvertisements, kind: BGPAdvertisement}
+  loop_control:
+    label: "{{ item.kind }}"
+  register: ocp_hcp_kubevirt_prereqs__metallb
+  when: ocp_hcp_kubevirt_prereqs__crds[item.key]
+
+# Several catalog sources can serve the same package (for example a
+# snapshot catalog next to redhat-operators); a GET by name returns only one.
+- name: Shift on Shift prereqs | Read operator packages for planned installs
+  kubernetes.core.k8s_info:
+    api_version: packages.operators.coreos.com/v1
+    kind: PackageManifest
+    namespace: openshift-marketplace
+    field_selectors:
+      - "metadata.name={{ ocp_hcp_kubevirt_prereqs__packages_by_item[item] }}"
+  loop: "{{ ocp_hcp_kubevirt_prereqs_install_planned | select('in', ocp_hcp_kubevirt_prereqs__packages_by_item) | list }}"
+  register: ocp_hcp_kubevirt_prereqs__packages
+
+- name: Shift on Shift prereqs | Read image mirror configuration
+  kubernetes.core.k8s_info:
+    api_version: "{{ item.api_version }}"
+    kind: "{{ item.kind }}"
+  loop:
+    - {key: idms, api_version: config.openshift.io/v1, kind: ImageDigestMirrorSet}
+    - {key: icsp, api_version: operator.openshift.io/v1alpha1, kind: ImageContentSourcePolicy}
+  loop_control:
+    label: "{{ item.kind }}"
+  register: ocp_hcp_kubevirt_prereqs__mirrors
+  when: ocp_hcp_kubevirt_prereqs__crds[item.key]
+
+- name: Shift on Shift prereqs | Read install config for FIPS mode
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: ConfigMap
+    name: cluster-config-v1
+    namespace: kube-system
+  register: ocp_hcp_kubevirt_prereqs__install_config
+  when: ocp_hcp_kubevirt_prereqs__definitions.clusters | selectattr('fips') | list | length > 0
+
+- name: Shift on Shift prereqs | Read hcp CLI download
+  kubernetes.core.k8s_info:
+    api_version: console.openshift.io/v1
+    kind: ConsoleCLIDownload
+    name: hcp-cli-download
+  register: ocp_hcp_kubevirt_prereqs__hcp_cli
+  when: ocp_hcp_kubevirt_prereqs__crds.consoleclidownloads
+
+- name: Shift on Shift prereqs | Check pull secrets
+  ansible.builtin.include_tasks: pull_secrets.yml
+
+- name: Shift on Shift prereqs | Check permissions
+  ansible.builtin.include_tasks: access.yml
+  when: ocp_hcp_kubevirt_prereqs_check_permissions | bool
+
+- name: Shift on Shift prereqs | Assemble facts
+  vars:
+    ocp_hcp_kubevirt_prereqs__cv_obj: "{{ (ocp_hcp_kubevirt_prereqs__cv.resources | default([]) | first) | default({}, true) }}"
+    ocp_hcp_kubevirt_prereqs__cv_cond: "{{ ocp_hcp_kubevirt_prereqs__cv_obj.status.conditions | default([]) }}"
+    ocp_hcp_kubevirt_prereqs__infra: "{{ (ocp_hcp_kubevirt_prereqs__config.results[0].resources | default([]) | first) | default({}, true) }}"
+    ocp_hcp_kubevirt_prereqs__net: "{{ (ocp_hcp_kubevirt_prereqs__config.results[1].resources | default([]) | first) | default({}, true) }}"
+    ocp_hcp_kubevirt_prereqs__img: "{{ (ocp_hcp_kubevirt_prereqs__config.results[2].resources | default([]) | first) | default({}, true) }}"
+    ocp_hcp_kubevirt_prereqs__ho_obj: "{{ (ocp_hcp_kubevirt_prereqs__ho.resources | default([]) | first) | default({}, true) }}"
+    ocp_hcp_kubevirt_prereqs__hco_obj: "{{ (ocp_hcp_kubevirt_prereqs__hco.resources | default([]) | first) | default({}, true) }}"
+    ocp_hcp_kubevirt_prereqs__addon_obj: "{{ (ocp_hcp_kubevirt_prereqs__addon.resources | default([]) | first) | default({}, true) }}"
+    ocp_hcp_kubevirt_prereqs__ingress_obj: "{{ (ocp_hcp_kubevirt_prereqs__ingress.resources | default([]) | first) | default({}, true) }}"
+    ocp_hcp_kubevirt_prereqs__metallb_counts: >-
+      {{
+        dict(
+          (ocp_hcp_kubevirt_prereqs__metallb.results | default([])) | map(attribute='item.key')
+          | zip(
+              (ocp_hcp_kubevirt_prereqs__metallb.results | default([]))
+              | map(attribute='resources', default=[]) | map('length')
+            )
+        )
+      }}
+    ocp_hcp_kubevirt_prereqs__mirror_lists: >-
+      {{
+        dict(
+          (ocp_hcp_kubevirt_prereqs__mirrors.results | default([])) | map(attribute='item.key')
+          | zip((ocp_hcp_kubevirt_prereqs__mirrors.results | default([])) | map(attribute='resources', default=[]))
+        )
+      }}
+    ocp_hcp_kubevirt_prereqs__supported_raw: >-
+      {{
+        ((ocp_hcp_kubevirt_prereqs__supported.resources | default([]) | first) | default({}, true)).data['supported-versions']
+        | default('{"versions": []}')
+      }}
+    ocp_hcp_kubevirt_prereqs__install_config_raw: >-
+      {{
+        ((ocp_hcp_kubevirt_prereqs__install_config.resources | default([]) | first) | default({}, true)).data['install-config']
+        | default('')
+      }}
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_prereqs__facts:
+      crds: "{{ ocp_hcp_kubevirt_prereqs__crds }}"
+      clusterversion:
+        version: "{{ ocp_hcp_kubevirt_prereqs__cv_obj.status.desired.version | default('') }}"
+        available: "{{ ocp_hcp_kubevirt_prereqs__cv_cond | infra.automation_development_office.hcp_kubevirt_condition_status('Available') }}"
+        progressing: "{{ ocp_hcp_kubevirt_prereqs__cv_cond | infra.automation_development_office.hcp_kubevirt_condition_status('Progressing') }}"
+        failing: "{{ ocp_hcp_kubevirt_prereqs__cv_cond | infra.automation_development_office.hcp_kubevirt_condition_status('Failing') }}"
+      clusteroperators: "{{ ocp_hcp_kubevirt_prereqs__co.resources | default([]) | infra.automation_development_office.hcp_kubevirt_cluster_operator_facts }}"
+      infrastructure:
+        platform: "{{ ocp_hcp_kubevirt_prereqs__infra.status.platformStatus.type | default(ocp_hcp_kubevirt_prereqs__infra.status.platform | default('')) }}"
+        control_plane_topology: "{{ ocp_hcp_kubevirt_prereqs__infra.status.controlPlaneTopology | default('') }}"
+      network:
+        type: "{{ ocp_hcp_kubevirt_prereqs__net.status.networkType | default('') }}"
+        mtu: "{{ ocp_hcp_kubevirt_prereqs__net.status.clusterNetworkMTU | default(0) }}"
+      nodes: "{{ ocp_hcp_kubevirt_prereqs__nodes.resources | default([]) | infra.automation_development_office.hcp_kubevirt_node_facts }}"
+      pod_requests: "{{ ocp_hcp_kubevirt_prereqs__pod_requests }}"
+      mce: "{{ ocp_hcp_kubevirt_prereqs__mce.resources | default([]) | infra.automation_development_office.hcp_kubevirt_mce_facts }}"
+      hypershift_operator:
+        present: "{{ ocp_hcp_kubevirt_prereqs__ho_obj | length > 0 }}"
+        available: "{{ (ocp_hcp_kubevirt_prereqs__ho_obj.status.conditions | default([]) | infra.automation_development_office.hcp_kubevirt_condition_status('Available')) is true }}"
+      # ansible-core < 2.19 turns the JSON text into a dict when templating vars.
+      supported_versions: >-
+        {{
+          (ocp_hcp_kubevirt_prereqs__supported_raw if ocp_hcp_kubevirt_prereqs__supported_raw is mapping
+           else (ocp_hcp_kubevirt_prereqs__supported_raw | from_json)).versions | default([])
+        }}
+      local_cluster:
+        present: "{{ 'local-cluster' in (ocp_hcp_kubevirt_prereqs__managed.resources | default([]) | map(attribute='metadata.name') | list) }}"
+      managed_clusters: "{{ ocp_hcp_kubevirt_prereqs__managed.resources | default([]) | map(attribute='metadata.name') | list }}"
+      hypershift_addon:
+        checked: "{{ ocp_hcp_kubevirt_prereqs__crds.managedclusteraddons }}"
+        available: "{{ (ocp_hcp_kubevirt_prereqs__addon_obj.status.conditions | default([]) | infra.automation_development_office.hcp_kubevirt_condition_status('Available')) is true }}"
+      existing_hostedclusters: "{{ ocp_hcp_kubevirt_prereqs__hcs.resources | default([]) | infra.automation_development_office.hcp_kubevirt_resource_refs }}"
+      cnv:
+        present: "{{ ocp_hcp_kubevirt_prereqs__hco_obj | length > 0 }}"
+        version: >-
+          {{
+            (ocp_hcp_kubevirt_prereqs__hco_obj.status.versions | default([])
+             | selectattr('name', 'equalto', 'operator') | map(attribute='version') | first)
+            | default('')
+          }}
+        available: "{{ ocp_hcp_kubevirt_prereqs__hco_obj.status.conditions | default([]) | infra.automation_development_office.hcp_kubevirt_condition_status('Available') }}"
+        degraded: "{{ ocp_hcp_kubevirt_prereqs__hco_obj.status.conditions | default([]) | infra.automation_development_office.hcp_kubevirt_condition_status('Degraded') }}"
+      storage_classes: "{{ ocp_hcp_kubevirt_prereqs__sc.resources | default([]) | infra.automation_development_office.hcp_kubevirt_storage_class_facts }}"
+      storage_profiles: "{{ ocp_hcp_kubevirt_prereqs__sp.resources | default([]) | infra.automation_development_office.hcp_kubevirt_storage_profile_facts }}"
+      volume_snapshot_classes: "{{ ocp_hcp_kubevirt_prereqs__vsc.resources | default([]) | infra.automation_development_office.hcp_kubevirt_snapshot_class_facts }}"
+      ingress:
+        wildcard_policy: "{{ ocp_hcp_kubevirt_prereqs__ingress_obj.spec.routeAdmission.wildcardPolicy | default('WildcardsDisallowed') }}"
+        default_domain: "{{ ocp_hcp_kubevirt_prereqs__ingress_obj.status.domain | default('') }}"
+      metallb:
+        instance_present: "{{ (ocp_hcp_kubevirt_prereqs__metallb_counts.metallb | default(0)) > 0 }}"
+        pools: "{{ ocp_hcp_kubevirt_prereqs__metallb_counts.ipaddresspools | default(0) }}"
+        advertisements: "{{ (ocp_hcp_kubevirt_prereqs__metallb_counts.l2advertisements | default(0)) + (ocp_hcp_kubevirt_prereqs__metallb_counts.bgpadvertisements | default(0)) }}"
+      packages: >-
+        {{
+          dict(
+            ocp_hcp_kubevirt_prereqs__packages.results | default([]) | map(attribute='item')
+            | zip(ocp_hcp_kubevirt_prereqs__packages.results | default([]) | map(attribute='resources', default=[]))
+          )
+        }}
+      mirror_sources: >-
+        {{
+          ocp_hcp_kubevirt_prereqs__mirror_lists.idms | default([])
+          | infra.automation_development_office.hcp_kubevirt_mirror_sources(ocp_hcp_kubevirt_prereqs__mirror_lists.icsp | default([]))
+        }}
+      image_additional_trusted_ca: "{{ (ocp_hcp_kubevirt_prereqs__img.spec.additionalTrustedCA.name | default('')) | length > 0 }}"
+      fips_enabled: "{{ ocp_hcp_kubevirt_prereqs__install_config_raw | infra.automation_development_office.hcp_kubevirt_install_config_fips }}"
+      hcp_cli_download: "{{ (ocp_hcp_kubevirt_prereqs__hcp_cli.resources | default([])) | length > 0 }}"
+      pull_secrets: "{{ ocp_hcp_kubevirt_prereqs__pull_secret_results }}"
+      access: "{{ ocp_hcp_kubevirt_prereqs__access | default({}) }}"

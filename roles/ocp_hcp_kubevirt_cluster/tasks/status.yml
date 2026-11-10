@@ -1,0 +1,43 @@
+---
+# yamllint disable rule:line-length
+# Read-only status and readiness report.
+- name: Shift on Shift status | Reset per-cluster facts
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__verify: {}
+
+- name: Shift on Shift status | Look up current state
+  ansible.builtin.include_tasks: lookup.yml
+
+- name: Shift on Shift status | Verify through the hosted API
+  ansible.builtin.include_tasks: verify.yml
+  when:
+    - ocp_hcp_kubevirt_cluster_verify_hosted_api | bool
+    - ocp_hcp_kubevirt_cluster__hc | length > 0
+    - (ocp_hcp_kubevirt_cluster__hc | infra.automation_development_office.hcp_kubevirt_hostedcluster_status).available
+
+- name: Shift on Shift status | Record result | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster_results: >-
+      {{
+        ocp_hcp_kubevirt_cluster_results + [{
+          'name': ocp_hcp_kubevirt_cluster__def.name,
+          'namespace': ocp_hcp_kubevirt_cluster__def.namespace,
+          'action': 'status',
+          'exists': ocp_hcp_kubevirt_cluster__hc | length > 0,
+          'hosted_cluster': ocp_hcp_kubevirt_cluster__hc | infra.automation_development_office.hcp_kubevirt_hostedcluster_status,
+          'nodepools': ocp_hcp_kubevirt_cluster__nodepools | map('infra.automation_development_office.hcp_kubevirt_nodepool_status') | list,
+          'immutable_drift': (
+            (ocp_hcp_kubevirt_cluster__def | infra.automation_development_office.hcp_kubevirt_immutable_drift(ocp_hcp_kubevirt_cluster__hc))
+            if ocp_hcp_kubevirt_cluster__hc | length > 0 else []
+          ),
+          'access': (
+            (ocp_hcp_kubevirt_cluster__hc | infra.automation_development_office.hcp_kubevirt_access_summary(ocp_hcp_kubevirt_cluster__mgmt_apps_domain))
+            if ocp_hcp_kubevirt_cluster__hc | length > 0 else {}
+          ),
+          'hosted_api_verification': ocp_hcp_kubevirt_cluster__verify
+        }]
+      }}
+
+- name: Shift on Shift status | Summary | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.debug:
+    msg: "{{ ocp_hcp_kubevirt_cluster_results | last }}"

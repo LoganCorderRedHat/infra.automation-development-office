@@ -1,0 +1,24 @@
+---
+# yamllint disable rule:line-length
+- name: Shift on Shift live | Validate and deploy a small hosted cluster
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Require a release image
+      ansible.builtin.assert:
+        that:
+          - lookup('ansible.builtin.env', 'SOS_RELEASE_IMAGE') | length > 0
+        fail_msg: Export SOS_RELEASE_IMAGE (for example quay.io/openshift-release-dev/ocp-release:4.22.0-multi).
+        quiet: true
+
+    - name: Deploy (validates prerequisites first)
+      ansible.builtin.include_role:
+        name: infra.automation_development_office.ocp_hcp_kubevirt_cluster
+      vars:
+        ocp_hcp_kubevirt_cluster_action: deploy
+        ocp_hcp_kubevirt_cluster_clusters: "{{ sos_live_clusters }}"
+        ocp_hcp_kubevirt_cluster_manage_wildcard_route_admission: "{{ lookup('ansible.builtin.env', 'SOS_ALLOW_WILDCARD_PATCH') | default(false, true) | bool }}"

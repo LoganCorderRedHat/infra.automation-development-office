@@ -1,0 +1,18 @@
+---
+# yamllint disable rule:line-length
+# Inputs come from the environment so no cluster details or secrets live in
+# the repository. Required: SOS_RELEASE_IMAGE. Optional: storage classes.
+sos_live_name: "{{ lookup('ansible.builtin.env', 'SOS_CLUSTER_NAME') | default('ado-molecule', true) }}"
+sos_live_namespace: "{{ lookup('ansible.builtin.env', 'SOS_NAMESPACE') | default('ado-molecule-hcp', true) }}"
+sos_live_clusters:
+  - name: "{{ sos_live_name }}"
+    namespace: "{{ sos_live_namespace }}"
+    release_image: "{{ lookup('ansible.builtin.env', 'SOS_RELEASE_IMAGE') }}"
+    pull_secret_source: management_cluster
+    controller_availability_policy: SingleReplica
+    worker_count: 2
+    worker_cores: 4
+    worker_memory: 16Gi
+    root_volume_size: 64Gi
+    root_volume_storage_class: "{{ lookup('ansible.builtin.env', 'SOS_ROOT_VOLUME_STORAGE_CLASS') | default('', true) }}"
+    etcd_storage_class: "{{ lookup('ansible.builtin.env', 'SOS_ETCD_STORAGE_CLASS') | default('', true) }}"

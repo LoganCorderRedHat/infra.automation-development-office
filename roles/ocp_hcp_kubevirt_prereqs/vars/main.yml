@@ -1,0 +1,26 @@
+---
+# API resources probed before querying optional components.
+ocp_hcp_kubevirt_prereqs__crd_names:
+  hostedclusters: hostedclusters.hypershift.openshift.io
+  nodepools: nodepools.hypershift.openshift.io
+  mce: multiclusterengines.multicluster.openshift.io
+  hco: hyperconvergeds.hco.kubevirt.io
+  kubevirt: virtualmachines.kubevirt.io
+  cdi: datavolumes.cdi.kubevirt.io
+  storageprofiles: storageprofiles.cdi.kubevirt.io
+  managedclusters: managedclusters.cluster.open-cluster-management.io
+  managedclusteraddons: managedclusteraddons.addon.open-cluster-management.io
+  metallb: metallbs.metallb.io
+  ipaddresspools: ipaddresspools.metallb.io
+  l2advertisements: l2advertisements.metallb.io
+  bgpadvertisements: bgpadvertisements.metallb.io
+  idms: imagedigestmirrorsets.config.openshift.io
+  icsp: imagecontentsourcepolicies.operator.openshift.io
+  volumesnapshotclasses: volumesnapshotclasses.snapshot.storage.k8s.io
+  consoleclidownloads: consoleclidownloads.console.openshift.io
+# OLM packages for prerequisites the deploy run can install
+# (ocp_hcp_kubevirt_prereqs_install_planned).
+ocp_hcp_kubevirt_prereqs__packages_by_item:
+  mce: multicluster-engine
+  virtualization: kubevirt-hyperconverged
+  metallb: metallb-operator

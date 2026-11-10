@@ -1,0 +1,52 @@
+---
+# yamllint disable rule:line-length
+controller_templates:
+  - name: ADO | Shift on Shift | Delete hosted cluster
+    description: Destroy one hosted cluster after typed confirmation
+    organization: '{{ bootstrap_controller_organization }}'
+    playbook: playbooks/shift_on_shift/ado-shift-on-shift-delete-bootstrap.yml
+    inventory: '{{ bootstrap_controller_inventory_name }}'
+    project: '{{ bootstrap_controller_project_name }}'
+    execution_environment: '{{ bootstrap_controller_execution_environment_name }}'
+    credentials:
+      - '{{ bootstrap_controller_creds }}'
+    related: null
+    labels:
+      - name: ADO | bootstrap
+        organization: '{{ bootstrap_controller_organization }}'
+      - name: ADO | shift_on_shift
+        organization: '{{ bootstrap_controller_organization }}'
+    extra_vars: {}
+    survey_enabled: true
+    survey_spec:
+      name: ADO | Shift on Shift | Delete hosted cluster Survey
+      description: Deletes the HostedCluster, its node pool VMs, and ADO-created supporting objects
+      spec:
+        - question_name: ADO | What environment?
+          question_description: Target environment (loads vars_shift_on_shift / vault_shift_on_shift)
+          required: true
+          type: multiplechoice
+          variable: env
+          choices: '{{ bootstrap_controller_environment_choices }}'
+          default: '{{ bootstrap_controller_default_environment }}'
+        - question_name: ADO | Hosted cluster name
+          question_description: Exactly one hosted cluster from vars_shift_on_shift.yml.
+          required: true
+          type: text
+          variable: shift_on_shift_cluster_name
+          default: ""
+        - question_name: ADO | Type the hosted cluster name to confirm deletion
+          question_description: Must exactly match the hosted cluster name above.
+          required: true
+          type: text
+          variable: shift_on_shift_confirm_delete
+          default: ""
+        - question_name: ADO | Delete namespace
+          question_description: Also delete the namespace if ADO created it and no other hosted clusters remain in it.
+          required: true
+          type: multiplechoice
+          variable: shift_on_shift_delete_namespace
+          choices:
+            - "false"
+            - "true"
+          default: "false"

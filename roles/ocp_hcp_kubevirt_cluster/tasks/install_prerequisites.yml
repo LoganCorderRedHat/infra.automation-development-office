@@ -1,0 +1,109 @@
+---
+# yamllint disable rule:line-length
+# deploy with install_prerequisites: install what is missing, reuse what is
+# there. The check runs first and stops before anything is installed when a
+# prerequisite that cannot be installed is missing (storage, workers,
+# versions, permissions). The deploy validation that follows is strict.
+- name: Shift on Shift prerequisites | Check the management cluster
+  ansible.builtin.include_role:
+    name: infra.automation_development_office.ocp_hcp_kubevirt_prereqs
+  vars:
+    ocp_hcp_kubevirt_prereqs_clusters: "{{ ocp_hcp_kubevirt_cluster_clusters }}"
+    ocp_hcp_kubevirt_prereqs_cluster_defaults: "{{ ocp_hcp_kubevirt_cluster_cluster_defaults }}"
+    ocp_hcp_kubevirt_prereqs_cluster_name: "{{ ocp_hcp_kubevirt_cluster_name }}"
+    ocp_hcp_kubevirt_prereqs_pull_secrets: "{{ ocp_hcp_kubevirt_cluster_pull_secrets }}"
+    ocp_hcp_kubevirt_prereqs_wildcard_remediation_planned: true
+    ocp_hcp_kubevirt_prereqs_install_planned: [mce, virtualization, metallb]
+    ocp_hcp_kubevirt_prereqs_metallb_address_pools: "{{ ocp_hcp_kubevirt_cluster_metallb_address_pools }}"
+    ocp_hcp_kubevirt_prereqs_allow_unsupported_platform: "{{ ocp_hcp_kubevirt_cluster_allow_unsupported_platform | bool }}"
+    ocp_hcp_kubevirt_prereqs_load_balancer_check: "{{ ocp_hcp_kubevirt_cluster_load_balancer_check }}"
+    ocp_hcp_kubevirt_prereqs_support_matrix: "{{ ocp_hcp_kubevirt_cluster_support_matrix }}"
+    ocp_hcp_kubevirt_prereqs_fail_on_missing: "{{ ocp_hcp_kubevirt_cluster_validate | bool }}"
+
+- name: Shift on Shift prerequisites | Record the install plan
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__install_plan: "{{ ocp_hcp_kubevirt_prereqs_report.install_plan | default({}) }}"
+
+- name: Shift on Shift prerequisites | Report the install plan
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        ('Installing: ' ~ (ocp_hcp_kubevirt_cluster__install_plan | list | join(', ')))
+        if ocp_hcp_kubevirt_cluster__install_plan
+        else 'All installable prerequisites are already present.'
+      }}
+
+- name: Shift on Shift prerequisites | Read existing operator Subscriptions
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1alpha1
+    kind: Subscription
+  register: ocp_hcp_kubevirt_cluster__subscriptions
+  when: ocp_hcp_kubevirt_cluster__install_plan | length > 0
+
+- name: Shift on Shift prerequisites | Note subscribed packages
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__subscribed: >-
+      {{
+        ocp_hcp_kubevirt_cluster__subscriptions.resources | default([])
+        | selectattr('spec.name', 'defined') | map(attribute='spec.name') | list
+      }}
+
+- name: Shift on Shift prerequisites | Install the multicluster engine Operator
+  ansible.builtin.include_role:
+    name: infra.automation_development_office.ocp_mce_install
+  vars:
+    ocp_mce_install_channel: "{{ ocp_hcp_kubevirt_cluster__install_plan.mce.channel }}"
+    ocp_mce_install_source: "{{ ocp_hcp_kubevirt_cluster__install_plan.mce.catalog_source }}"
+    ocp_mce_install_source_namespace: "{{ ocp_hcp_kubevirt_cluster__install_plan.mce.catalog_source_namespace }}"
+  when: "'mce' in ocp_hcp_kubevirt_cluster__install_plan"
+
+- name: Shift on Shift prerequisites | Install OpenShift Virtualization
+  when: "'virtualization' in ocp_hcp_kubevirt_cluster__install_plan"
+  block:
+    - name: Shift on Shift prerequisites | Subscribe to OpenShift Virtualization
+      ansible.builtin.include_role:
+        name: infra.automation_development_office.ocp_operator_subscription
+      vars:
+        name_space: openshift-cnv
+        operator_subscription_namespace: openshift-cnv
+        operatorgroup: kubevirt-hyperconverged-group
+        all_namespaces_install: false
+        operator_name: kubevirt-hyperconverged
+        operator_csv_contains: kubevirt-hyperconverged
+        operator_channel: "{{ ocp_hcp_kubevirt_cluster__install_plan.virtualization.channel }}"
+        operator_source: "{{ ocp_hcp_kubevirt_cluster__install_plan.virtualization.catalog_source }}"
+        operator_source_namespace: "{{ ocp_hcp_kubevirt_cluster__install_plan.virtualization.catalog_source_namespace }}"
+        state: present
+      when: "'kubevirt-hyperconverged' not in ocp_hcp_kubevirt_cluster__subscribed"
+
+    # Waits for the operator CSV, creates HyperConverged, waits for Available.
+    - name: Shift on Shift prerequisites | Create HyperConverged
+      ansible.builtin.include_role:
+        name: infra.automation_development_office.ocp_virtualization_install
+      vars:
+        name_space: openshift-cnv
+        operator_subscription_namespace: openshift-cnv
+        operator_name: kubevirt-hyperconverged
+        operator_csv_contains: kubevirt-hyperconverged
+        state: present
+
+- name: Shift on Shift prerequisites | Set up MetalLB
+  ansible.builtin.include_role:
+    name: infra.automation_development_office.ocp_metallb_install
+  vars:
+    ocp_metallb_install_operator: "{{ 'metallb-operator' not in ocp_hcp_kubevirt_cluster__subscribed }}"
+    ocp_metallb_operator_channel: "{{ ocp_hcp_kubevirt_cluster__install_plan.metallb.channel or 'stable' }}"
+    ocp_metallb_operator_source: "{{ ocp_hcp_kubevirt_cluster__install_plan.metallb.catalog_source or 'redhat-operators' }}"
+    ocp_metallb_operator_source_namespace: "{{ ocp_hcp_kubevirt_cluster__install_plan.metallb.catalog_source_namespace or 'openshift-marketplace' }}"
+    ocp_metallb_config:
+      enabled: true
+      address_pools:
+        - name: "{{ ocp_hcp_kubevirt_cluster_metallb_pool_name }}"
+          addresses: "{{ ocp_hcp_kubevirt_cluster__install_plan.metallb.address_pools }}"
+      l2_advertisements:
+        - name: "{{ ocp_hcp_kubevirt_cluster_metallb_pool_name }}"
+          ip_address_pools:
+            - "{{ ocp_hcp_kubevirt_cluster_metallb_pool_name }}"
+      bgp_peers: []
+      bgp_advertisements: []
+  when: "'metallb' in ocp_hcp_kubevirt_cluster__install_plan"

@@ -39,6 +39,7 @@ generate_env_vars_components:  # noqa: var-naming[no-role-prefix]
   - netbox
   - rhbk
   - openshift_networking
+  - shift_on_shift
   - gitlab_runner
   - web_terminal
 
@@ -88,6 +89,7 @@ bootstrap_generate_env_vars_preflight_ui_openshift_apps:
   - quay
   - rhbk
   - openshift_networking
+  - shift_on_shift
   - zabbix
 
 # Playbook apps that exist in the collection but are not preflight UI

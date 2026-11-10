@@ -1,0 +1,49 @@
+---
+# yamllint disable rule:line-length
+# Non-secret access details. The kubeconfig is written only to an explicit
+# local path with mode 0600 and is never printed.
+- name: Shift on Shift access | Look up current state
+  ansible.builtin.include_tasks: lookup.yml
+
+- name: Shift on Shift access | Require the hosted cluster | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.assert:
+    that:
+      - ocp_hcp_kubevirt_cluster__hc | length > 0
+    fail_msg: >-
+      HostedCluster {{ ocp_hcp_kubevirt_cluster__def.namespace }}/{{ ocp_hcp_kubevirt_cluster__def.name }} not found.
+    quiet: true
+
+- name: Shift on Shift access | Write admin kubeconfig to the requested path
+  when: ocp_hcp_kubevirt_cluster_kubeconfig_dest | length > 0
+  block:
+    - name: Shift on Shift access | Load hosted kubeconfig
+      ansible.builtin.include_tasks: hosted_kubeconfig.yml
+
+    - name: Shift on Shift access | Write kubeconfig file (mode 0600)
+      ansible.builtin.copy:
+        content: "{{ ocp_hcp_kubevirt_cluster__hosted_kubeconfig | to_nice_yaml }}"
+        dest: "{{ ocp_hcp_kubevirt_cluster_kubeconfig_dest }}"
+        mode: "0600"
+      no_log: true
+  always:
+    - name: Shift on Shift access | Drop hosted kubeconfig from memory
+      ansible.builtin.set_fact:
+        ocp_hcp_kubevirt_cluster__hosted_kubeconfig: {}
+      no_log: true
+
+- name: Shift on Shift access | Record result | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster_results: >-
+      {{
+        ocp_hcp_kubevirt_cluster_results + [{
+          'name': ocp_hcp_kubevirt_cluster__def.name,
+          'namespace': ocp_hcp_kubevirt_cluster__def.namespace,
+          'action': 'access',
+          'access': ocp_hcp_kubevirt_cluster__hc | infra.automation_development_office.hcp_kubevirt_access_summary(ocp_hcp_kubevirt_cluster__mgmt_apps_domain),
+          'kubeconfig_written_to': ocp_hcp_kubevirt_cluster_kubeconfig_dest
+        }]
+      }}
+
+- name: Shift on Shift access | Summary | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.debug:
+    msg: "{{ ocp_hcp_kubevirt_cluster_results | last }}"

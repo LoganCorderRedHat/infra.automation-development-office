@@ -1,0 +1,42 @@
+---
+# yamllint disable rule:line-length
+# Prepares calls to the hosted API. Management cluster K8S_AUTH_* variables
+# cannot be unset per task and kubernetes.core applies them over a kubeconfig,
+# so hosted calls pin context, host, api_key, validate_certs, and ca_cert to
+# the hosted kubeconfig (hcp_kubevirt_hosted_auth). The kubeconfig CA (public)
+# goes to a temporary file. Callers include hosted_api_cleanup.yml in always.
+- name: Shift on Shift | Load hosted kubeconfig
+  ansible.builtin.include_tasks: hosted_kubeconfig.yml
+
+- name: Shift on Shift | Resolve hosted API connection | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__hosted_auth: "{{ ocp_hcp_kubevirt_cluster__hosted_kubeconfig | infra.automation_development_office.hcp_kubevirt_hosted_auth }}"
+  no_log: true
+
+- name: Shift on Shift | Write hosted API CA to a temporary file
+  when:
+    - ocp_hcp_kubevirt_cluster__hosted_auth.validate_certs
+    - ocp_hcp_kubevirt_cluster__hosted_auth.ca_data | length > 0
+  block:
+    - name: Shift on Shift | Create temporary CA file
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .hosted-ca.crt
+      register: ocp_hcp_kubevirt_cluster__hosted_ca_tmp
+      changed_when: false  # local scratch file, removed after use
+
+    - name: Shift on Shift | Write hosted API CA
+      ansible.builtin.copy:
+        content: "{{ ocp_hcp_kubevirt_cluster__hosted_auth.ca_data | b64decode }}"
+        dest: "{{ ocp_hcp_kubevirt_cluster__hosted_ca_tmp.path }}"
+        mode: "0600"
+      changed_when: false
+
+- name: Shift on Shift | Record hosted API CA path | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__hosted_ca_file: >-
+      {{
+        ocp_hcp_kubevirt_cluster__hosted_ca_tmp.path | default('')
+        if ocp_hcp_kubevirt_cluster__hosted_auth.ca_data | length > 0
+        else ocp_hcp_kubevirt_cluster__hosted_auth.ca_file
+      }}

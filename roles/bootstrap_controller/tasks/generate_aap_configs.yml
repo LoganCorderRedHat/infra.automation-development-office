@@ -309,6 +309,15 @@
       ocp_virtualization:
         - ado-ocp-virtualization-deploy-bootstrap.jt.yml
 
+      shift_on_shift:
+        - ado-shift-on-shift-validate-bootstrap.jt.yml
+        - ado-shift-on-shift-deploy-bootstrap.jt.yml
+        - ado-shift-on-shift-status-bootstrap.jt.yml
+        - ado-shift-on-shift-scale-bootstrap.jt.yml
+        - ado-shift-on-shift-update-bootstrap.jt.yml
+        - ado-shift-on-shift-access-bootstrap.jt.yml
+        - ado-shift-on-shift-delete-bootstrap.jt.yml
+
       mtv:
         - ado-mtv-deploy-bootstrap.jt.yml
 

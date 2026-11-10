@@ -1,0 +1,20 @@
+---
+# yamllint disable rule:line-length
+- name: Shift on Shift live | Delete the hosted cluster
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Delete with typed confirmation
+      ansible.builtin.include_role:
+        name: infra.automation_development_office.ocp_hcp_kubevirt_cluster
+      vars:
+        ocp_hcp_kubevirt_cluster_action: delete
+        ocp_hcp_kubevirt_cluster_clusters: "{{ sos_live_clusters }}"
+        ocp_hcp_kubevirt_cluster_name: "{{ sos_live_name }}"
+        ocp_hcp_kubevirt_cluster_confirm_delete: "{{ sos_live_name }}"
+        ocp_hcp_kubevirt_cluster_delete_namespace: true
+      when: lookup('ansible.builtin.env', 'SOS_RELEASE_IMAGE') | length > 0

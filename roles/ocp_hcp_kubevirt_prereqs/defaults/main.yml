@@ -1,0 +1,60 @@
+---
+# Read-only prerequisite validation for hosted control planes on
+# OpenShift Virtualization (Shift on Shift). See docs/SHIFT_ON_SHIFT.md.
+
+# Hosted cluster definitions to validate. Keys are documented in the role
+# README and docs/SHIFT_ON_SHIFT.md (name, namespace, release_image, ...).
+ocp_hcp_kubevirt_prereqs_clusters: []
+# Values merged under every definition (per-cluster keys win).
+ocp_hcp_kubevirt_prereqs_cluster_defaults: {}
+# Validate only this hosted cluster name. Empty validates every definition.
+ocp_hcp_kubevirt_prereqs_cluster_name: ""
+# Pull secret JSON per cluster name for pull_secret_source=vault. Comes from
+# the encrypted vault file; never printed.
+ocp_hcp_kubevirt_prereqs_pull_secrets: {}
+
+# Fail the play when a required prerequisite is missing.
+ocp_hcp_kubevirt_prereqs_fail_on_missing: true
+# Lab override: report a non bare metal management cluster as an
+# UNSUPPORTED warning instead of a failure. Not a supported configuration.
+ocp_hcp_kubevirt_prereqs_allow_unsupported_platform: false
+# Set by the deploy role when the operator opted in to enabling wildcard
+# route admission; the missing setting is then reported as pending.
+ocp_hcp_kubevirt_prereqs_wildcard_remediation_planned: false
+# Set by the deploy role when install_prerequisites is on: items from mce,
+# virtualization, metallb that deploy installs when missing. Missing items
+# that can be installed (their OLM package is in a catalog source) are
+# reported as planned instead of failing.
+ocp_hcp_kubevirt_prereqs_install_planned: []
+# MetalLB address ranges deploy would configure (for example
+# 192.168.10.240-192.168.10.250 or 192.168.10.240/28).
+ocp_hcp_kubevirt_prereqs_metallb_address_pools: []
+# metallb checks for a MetalLB instance, IPAddressPool and advertisement when
+# LoadBalancer publishing is used. skip trusts an external load balancer.
+ocp_hcp_kubevirt_prereqs_load_balancer_check: metallb
+ocp_hcp_kubevirt_prereqs_check_capacity: true
+ocp_hcp_kubevirt_prereqs_check_permissions: true
+ocp_hcp_kubevirt_prereqs_min_workers: 3
+# Per hosted control plane baseline from the 4.22 sizing guidance
+# (highly available control plane: ~78 pods, 5 vCPU, 18 GiB requests).
+ocp_hcp_kubevirt_prereqs_sizing:
+  control_plane_cpu: "5"
+  control_plane_memory: 18Gi
+ocp_hcp_kubevirt_prereqs_control_plane_pods: 78
+# Optional path for a JSON copy of the report (no secrets are included).
+ocp_hcp_kubevirt_prereqs_report_path: ""
+
+ocp_hcp_kubevirt_prereqs_hypershift_namespace: hypershift
+ocp_hcp_kubevirt_prereqs_cnv_namespace: openshift-cnv
+ocp_hcp_kubevirt_prereqs_hco_name: kubevirt-hyperconverged
+
+# Test seam: when non-empty, these facts are evaluated instead of querying
+# the API (used by the offline Molecule scenario).
+ocp_hcp_kubevirt_prereqs_facts: {}
+
+# Support matrix override. Empty uses the built-in OpenShift 4.22 "Support
+# matrix for hosted control planes" (SUPPORT_MATRIX in
+# plugins/filter/hcp_kubevirt.py). An override needs the same shape:
+#   mce: {"2.17": {management: [...], hosted: [...]}, ...}
+#   kubevirt_platform: {management: [...], hosted: [...]}
+ocp_hcp_kubevirt_prereqs_support_matrix: {}

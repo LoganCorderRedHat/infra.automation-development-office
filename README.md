@@ -146,12 +146,15 @@ Use this index as the starting point for operators and automation users.
 | [`infra.automation_development_office.ocp_egress`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/roles/ocp_egress/README.md) | Apply OpenShift egress resources (EgressIP, EgressFirewall) on OVN-Kubernetes. |
 | [`infra.automation_development_office.ocp_gitlab_runner`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/roles/ocp_gitlab_runner/README.md) | Deploy GitLab Runner to OpenShift using a Kubernetes deployment. |
 | [`infra.automation_development_office.ocp_gitops`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/roles/ocp_gitops/README.md) | Deploy and configure an OpenShift GitOps (Argo CD) instance and optional route. |
+| [`infra.automation_development_office.ocp_hcp_kubevirt_cluster`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/roles/ocp_hcp_kubevirt_cluster/README.md) | Shift on Shift: deploy, inspect, scale, update, access, and delete hosted clusters on the HyperShift KubeVirt platform. |
+| [`infra.automation_development_office.ocp_hcp_kubevirt_prereqs`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/roles/ocp_hcp_kubevirt_prereqs/README.md) | Shift on Shift: read-only prerequisite validation for hosted control planes on OpenShift Virtualization (4.22 support matrix); reports what deploy will install. |
 | [`infra.automation_development_office.ocp_htpasswd_admin`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/roles/ocp_htpasswd_admin/README.md) | Create or remove an htpasswd OAuth identity provider and admin user on OpenShift. |
 | [`infra.automation_development_office.ocp_image_registry`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/roles/ocp_image_registry/README.md) | Optionally enable the OpenShift integrated image registry and validate operational status. |
 | [`infra.automation_development_office.ocp_iscsi_storage`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/roles/ocp_iscsi_storage/README.md) | Install Synology CSI (iSCSI) on OpenShift using kubernetes.core.k8s. |
 | [`infra.automation_development_office.ocp_ldap_auth`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/roles/ocp_ldap_auth/README.md) | Configure OpenShift LDAP OAuth authentication from vault ldap_config. |
 | [`infra.automation_development_office.ocp_logging`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/roles/ocp_logging/README.md) | Configure OpenShift Cluster Log Forwarder (for example Splunk) for cluster logging. |
 | [`infra.automation_development_office.ocp_loki`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/roles/ocp_loki/README.md) | Create or delete a LokiStack for OpenShift logging and observability. |
+| [`infra.automation_development_office.ocp_mce_install`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/roles/ocp_mce_install/README.md) | Install the multicluster engine Operator and MultiClusterEngine (reuses an existing installation) and wait for the HyperShift Operator. |
 | [`infra.automation_development_office.ocp_metallb_install`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/roles/ocp_metallb_install/README.md) | Install MetalLB and configure IPAddressPools, L2Advertisements, and BGP peering for bare-metal LoadBalancer services. |
 | [`infra.automation_development_office.ocp_minio`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/roles/ocp_minio/README.md) | Deploy MinIO object storage on OpenShift with API/console Routes and optional Keycloak OIDC console login. |
 | [`infra.automation_development_office.ocp_namespace`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/roles/ocp_namespace/README.md) | Create or delete one OpenShift/Kubernetes namespace. ``state=absent`` deletes only that Namespace unless advanced cleanup is explicitly enabled. |
@@ -286,6 +289,16 @@ Examples:
 - `integration_bootstrap_ec2_instance` /
   `integration_bootstrap_s3_bucket_policy` — preflight → generated bootstrap
   content (no fakecloud)
+
+Shift on Shift (hosted control planes on OpenShift Virtualization, see
+[`docs/SHIFT_ON_SHIFT.md`](https://github.com/redhat-cop/infra.automation-development-office/blob/main/docs/SHIFT_ON_SHIFT.md)):
+
+- `integration_hcp_kubevirt_offline` — prerequisite evaluation against fixture
+  facts, manifest rendering, input and delete guards (no cluster)
+- `integration_bootstrap_shift_on_shift` — preflight → generated playbooks, job
+  templates, and the vars/vault split (no cluster)
+- `ocp_hcp_kubevirt` — live deploy, idempotence, scale, and delete (cluster
+  required; excluded from PR CI)
 
 ### GitHub Actions manual runs
 

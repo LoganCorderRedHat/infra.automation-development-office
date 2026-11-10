@@ -58,6 +58,7 @@ Automation Development Office
 | `ocp_metallb_config.bgp_peers` | `[]` | BGPPeer definitions |
 | `ocp_metallb_config.bgp_advertisements` | `[]` | BGPAdvertisement definitions |
 | `ocp_metallb_wait_timeout` | `300` | Declared default; the readiness wait currently uses fixed retries |
+| `ocp_metallb_install_operator` | `true` | Set `false` when the MetalLB Operator is already subscribed; only the instance, pools, and advertisements are created |
 
 > **`enabled` does not gate this role.** The tasks never read
 > `ocp_metallb_config.enabled`; the check lives in the caller

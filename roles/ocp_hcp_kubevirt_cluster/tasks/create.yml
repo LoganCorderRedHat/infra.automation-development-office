@@ -1,0 +1,149 @@
+---
+# yamllint disable rule:line-length
+# Runs only when the HostedCluster does not exist. Supporting objects carry
+# ADO ownership labels so delete removes only what ADO created.
+- name: Shift on Shift create | Resolve supporting object names
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__objects: "{{ ocp_hcp_kubevirt_cluster__def | infra.automation_development_office.hcp_kubevirt_supporting_objects }}"
+
+- name: Shift on Shift create | Read namespace | {{ ocp_hcp_kubevirt_cluster__def.namespace }}
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Namespace
+    name: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+  register: ocp_hcp_kubevirt_cluster__ns
+
+- name: Shift on Shift create | Create namespace | {{ ocp_hcp_kubevirt_cluster__def.namespace }}
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+        labels:
+          app.kubernetes.io/managed-by: infra.automation_development_office
+          app.kubernetes.io/part-of: shift-on-shift
+  when: ocp_hcp_kubevirt_cluster__ns.resources | default([]) | length == 0
+
+- name: Shift on Shift create | Read management cluster pull secret
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: pull-secret
+    namespace: openshift-config
+  register: ocp_hcp_kubevirt_cluster__mgmt_pull_secret
+  no_log: true
+  when: ocp_hcp_kubevirt_cluster__def.pull_secret_source == 'management_cluster'
+
+- name: Shift on Shift create | Require pull secret content
+  ansible.builtin.assert:
+    that:
+      # Parenthesized: ansible-core < 2.19 wraps conditionals in {% if %}.
+      - >-
+        ((ocp_hcp_kubevirt_cluster__mgmt_pull_secret.resources | default([]) | length > 0)
+         if ocp_hcp_kubevirt_cluster__def.pull_secret_source == 'management_cluster'
+         else (ocp_hcp_kubevirt_cluster_pull_secrets[ocp_hcp_kubevirt_cluster__def.name] | default('') | length > 0))
+    fail_msg: >-
+      No pull secret content for {{ ocp_hcp_kubevirt_cluster__def.name }}
+      (source {{ ocp_hcp_kubevirt_cluster__def.pull_secret_source }}).
+    quiet: true
+  when: ocp_hcp_kubevirt_cluster__def.pull_secret_source in ['management_cluster', 'vault']
+
+- name: Shift on Shift create | Create hosted cluster pull secret
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      type: kubernetes.io/dockerconfigjson
+      metadata:
+        name: "{{ ocp_hcp_kubevirt_cluster__objects.pull_secret }}"
+        namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+        labels: "{{ ocp_hcp_kubevirt_cluster__objects.secret_labels }}"
+      data:
+        .dockerconfigjson: >-
+          {{
+            ((ocp_hcp_kubevirt_cluster__mgmt_pull_secret.resources | first).data['.dockerconfigjson'])
+            if ocp_hcp_kubevirt_cluster__def.pull_secret_source == 'management_cluster'
+            else (ocp_hcp_kubevirt_cluster_pull_secrets[ocp_hcp_kubevirt_cluster__def.name] | b64encode)
+          }}
+  no_log: true
+  when: ocp_hcp_kubevirt_cluster__def.pull_secret_source in ['management_cluster', 'vault']
+
+- name: Shift on Shift create | Confirm referenced pull secret exists
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: "{{ ocp_hcp_kubevirt_cluster__def.pull_secret_name }}"
+    namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+  register: ocp_hcp_kubevirt_cluster__ref_pull_secret
+  no_log: true
+  failed_when: ocp_hcp_kubevirt_cluster__ref_pull_secret.resources | default([]) | length == 0
+  when: ocp_hcp_kubevirt_cluster__def.pull_secret_source == 'existing_secret'
+
+- name: Shift on Shift create | Create SSH public key secret
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ ocp_hcp_kubevirt_cluster__objects.ssh_key_secret }}"
+        namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+        labels: "{{ ocp_hcp_kubevirt_cluster__objects.secret_labels }}"
+      data:
+        id_rsa.pub: "{{ ocp_hcp_kubevirt_cluster__def.ssh_public_key | b64encode }}"
+  when: ocp_hcp_kubevirt_cluster__objects.ssh_key_secret | length > 0
+
+- name: Shift on Shift create | Read etcd encryption key
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: "{{ ocp_hcp_kubevirt_cluster__objects.etcd_encryption_secret }}"
+    namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+  register: ocp_hcp_kubevirt_cluster__etcd_key
+  no_log: true
+
+# Created once and never rotated by reruns. 32 random characters give the
+# 32-byte AES-CBC key the HostedCluster secretEncryption expects.
+- name: Shift on Shift create | Create etcd encryption key
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      type: Opaque
+      metadata:
+        name: "{{ ocp_hcp_kubevirt_cluster__objects.etcd_encryption_secret }}"
+        namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+        labels: "{{ ocp_hcp_kubevirt_cluster__objects.secret_labels }}"
+      data:
+        key: "{{ lookup('ansible.builtin.password', '/dev/null', chars=['ascii_letters', 'digits'], length=32) | b64encode }}"
+  no_log: true
+  when: ocp_hcp_kubevirt_cluster__etcd_key.resources | default([]) | length == 0
+
+- name: Shift on Shift create | Create additional trust bundle
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: "{{ ocp_hcp_kubevirt_cluster__objects.trust_bundle_configmap }}"
+        namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+        labels: "{{ ocp_hcp_kubevirt_cluster__objects.labels }}"
+      data:
+        ca-bundle.crt: "{{ ocp_hcp_kubevirt_cluster__def.disconnected.additional_trust_bundle }}"
+  when: ocp_hcp_kubevirt_cluster__objects.trust_bundle_configmap | length > 0
+
+- name: Shift on Shift create | Create HostedCluster | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ ocp_hcp_kubevirt_cluster__def | infra.automation_development_office.hcp_kubevirt_hostedcluster_manifest }}"
+
+- name: Shift on Shift create | Create default NodePool | {{ ocp_hcp_kubevirt_cluster__def.nodepool.name }}
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ ocp_hcp_kubevirt_cluster__def | infra.automation_development_office.hcp_kubevirt_nodepool_manifest }}"
+  when: ocp_hcp_kubevirt_cluster__nodepools | selectattr('metadata.name', 'equalto', ocp_hcp_kubevirt_cluster__def.nodepool.name) | list | length == 0

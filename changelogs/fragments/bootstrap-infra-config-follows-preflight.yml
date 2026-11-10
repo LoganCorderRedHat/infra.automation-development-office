@@ -1,0 +1,9 @@
+---
+bugfixes:
+  - >-
+    bootstrap_generate_env_vars - ``infra_config_vars.yml`` (the OpenShift
+    API host, apps domain, and TLS settings every OpenShift playbook uses) is
+    now rewritten on every Preflight bootstrap run. Before, an existing file
+    in the playbook repo was kept unless *Override group_vars* was selected,
+    so after pointing Preflight at a different cluster the playbooks still
+    called the previous cluster's API.

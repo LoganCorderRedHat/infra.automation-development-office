@@ -1,0 +1,113 @@
+---
+# yamllint disable rule:line-length
+- name: Verify shift_on_shift bootstrap content
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  vars:
+    env: molecule
+    sos_actions: [validate, deploy, status, scale, update, access, delete]
+    sos_env_dir: "{{ playbook_dir }}/group_vars/all/{{ env }}"
+
+  tasks:
+    - name: Stat generated seed playbooks and job templates
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: >-
+        {{
+          (sos_actions | map('regex_replace', '^(.*)$', playbook_dir ~ '/playbooks/shift_on_shift/ado-shift-on-shift-\1-bootstrap.yml') | list)
+          + (sos_actions | map('regex_replace', '^(.*)$', playbook_dir ~ '/configs/job_templates/ado-shift-on-shift-\1-bootstrap.jt.yml') | list)
+        }}
+      register: sos_artifacts
+
+    - name: Assert every seed playbook and job template was generated
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: "Expected {{ item.item }} to be generated"
+      loop: "{{ sos_artifacts.results }}"
+      loop_control:
+        label: "{{ item.item | basename }}"
+
+    - name: Syntax-check generated seed playbooks
+      ansible.builtin.command:
+        cmd: >-
+          ansible-playbook --syntax-check -i localhost, -e env={{ env }}
+          {{ playbook_dir }}/playbooks/shift_on_shift/ado-shift-on-shift-{{ item }}-bootstrap.yml
+      loop: "{{ sos_actions }}"
+      changed_when: false
+
+    - name: Read generated vars and vault files
+      ansible.builtin.slurp:
+        src: "{{ sos_env_dir }}/{{ item }}"
+      loop:
+        - vars_shift_on_shift.yml
+        - vault_shift_on_shift.yml
+        - infra_config_vars.yml
+      register: sos_files
+
+    - name: Assert the cluster connection follows the preflight form, not the older file
+      vars:
+        sos_infra: "{{ sos_files.results[2].content | b64decode | from_yaml }}"
+      ansible.builtin.assert:
+        that:
+          - sos_infra.host == 'https://api.mgmt.example.test:6443'
+          - sos_infra.api_host == 'https://api.mgmt.example.test:6443'
+          - sos_infra.apps_domain == 'apps.mgmt.example.test'
+        fail_msg: "infra_config_vars.yml kept a stale connection: {{ sos_infra.host }}"
+
+    - name: Parse generated vars and vault files
+      ansible.builtin.set_fact:
+        sos_vars_text: "{{ sos_files.results[0].content | b64decode }}"
+        sos_vars: "{{ sos_files.results[0].content | b64decode | from_yaml }}"
+        sos_vault: "{{ sos_files.results[1].content | b64decode | from_yaml }}"
+
+    - name: Assert vars carry the hosted cluster definitions without secrets
+      ansible.builtin.assert:
+        that:
+          - sos_vars.shift_on_shift_clusters | length == 2
+          - sos_vars.shift_on_shift_clusters | map(attribute='name') | list == ['tenant-a', 'tenant-b']
+          - sos_vars.shift_on_shift_clusters | selectattr('pull_secret', 'defined') | list | length == 0
+          - "'TU9MRUNVTEU6RkFLRQ' not in sos_vars_text"
+          - "'auths' not in sos_vars_text"
+          - sos_vars.shift_on_shift_manage_wildcard_route_admission is true
+          - sos_vars.shift_on_shift_install_prerequisites is true
+          - sos_vars.shift_on_shift_metallb_address_pools == ['192.0.2.240-192.0.2.250']
+          - sos_vars.shift_on_shift_load_balancer_check == 'metallb'
+          - (sos_vars.shift_on_shift_clusters | last).base_domain == 'tenants.example.test'
+          - (sos_vars.shift_on_shift_clusters | first).require_live_migration is true
+        fail_msg: vars_shift_on_shift.yml content is wrong or contains secret material
+
+    - name: Assert the generic overlay did not spill cluster keys to top-level vars
+      ansible.builtin.assert:
+        that:
+          - sos_vars.clusters is not defined
+          - sos_vars.namespace is not defined
+          - sos_vars.component_config is not defined
+        fail_msg: overlay_preflight_component_values.py must not merge shift_on_shift into top-level vars
+
+    - name: Assert vault carries only the vault-sourced pull secret
+      ansible.builtin.assert:
+        that:
+          - sos_vault.shift_on_shift_pull_secrets.keys() | list == ['tenant-b']
+          - (sos_vault.shift_on_shift_pull_secrets['tenant-b'] | from_json).auths['quay.io'] is defined
+          - sos_vault.component_vault_config is not defined
+        fail_msg: vault_shift_on_shift.yml content is wrong
+
+    - name: Read the local component execution plan
+      ansible.builtin.slurp:
+        src: "{{ playbook_dir }}/component-run-plan.json"
+      register: sos_plan_raw
+
+    - name: Assert only read-only and deploy steps are recommended for local runs
+      vars:
+        sos_steps: >-
+          {{ (sos_plan_raw.content | b64decode | from_json).steps | selectattr('component', 'equalto', 'shift_on_shift') | list }}
+      ansible.builtin.assert:
+        that:
+          - sos_steps | length == 7
+          - >-
+            sos_steps | selectattr('recommended') | map(attribute='playbook') | map('basename') | sort
+            == ['ado-shift-on-shift-deploy-bootstrap.yml', 'ado-shift-on-shift-status-bootstrap.yml', 'ado-shift-on-shift-validate-bootstrap.yml']
+        fail_msg: "Unexpected local run recommendations: {{ sos_steps | map(attribute='playbook') | list }}"

@@ -1,0 +1,133 @@
+---
+# yamllint disable rule:line-length
+# Offline: the prerequisite role evaluates fixture facts (no API calls) and the
+# cluster role renders manifests instead of applying them.
+- name: Shift on Shift offline | Evaluate prerequisites and render manifests
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars_files:
+    - fixtures/clusters.yml
+  vars:
+    sos_artifacts: "{{ playbook_dir }}/.artifacts"
+
+  tasks:
+    - name: Create artifact directory
+      ansible.builtin.file:
+        path: "{{ sos_artifacts }}"
+        state: directory
+        mode: "0750"
+
+    - name: Ready management cluster passes validation
+      ansible.builtin.include_role:
+        name: infra.automation_development_office.ocp_hcp_kubevirt_prereqs
+      vars:
+        ocp_hcp_kubevirt_prereqs_clusters: "{{ sos_offline_clusters }}"
+        ocp_hcp_kubevirt_prereqs_pull_secrets: "{{ sos_offline_pull_secrets }}"
+        ocp_hcp_kubevirt_prereqs_facts: "{{ lookup('ansible.builtin.file', 'fixtures/facts_ready.yml') | from_yaml }}"
+        ocp_hcp_kubevirt_prereqs_report_path: "{{ sos_artifacts }}/report_ready.json"
+
+    - name: Not-ready management cluster is reported without failing
+      ansible.builtin.include_role:
+        name: infra.automation_development_office.ocp_hcp_kubevirt_prereqs
+      vars:
+        ocp_hcp_kubevirt_prereqs_clusters: "{{ sos_offline_clusters }}"
+        ocp_hcp_kubevirt_prereqs_facts: "{{ lookup('ansible.builtin.file', 'fixtures/facts_not_ready.yml') | from_yaml }}"
+        ocp_hcp_kubevirt_prereqs_fail_on_missing: false
+        ocp_hcp_kubevirt_prereqs_report_path: "{{ sos_artifacts }}/report_not_ready.json"
+
+    - name: Fresh management cluster passes when deploy installs the prerequisites
+      ansible.builtin.include_role:
+        name: infra.automation_development_office.ocp_hcp_kubevirt_prereqs
+      vars:
+        ocp_hcp_kubevirt_prereqs_clusters: "{{ sos_offline_clusters }}"
+        ocp_hcp_kubevirt_prereqs_pull_secrets: "{{ sos_offline_pull_secrets }}"
+        ocp_hcp_kubevirt_prereqs_facts: >-
+          {{
+            (lookup('ansible.builtin.file', 'fixtures/facts_ready.yml') | from_yaml)
+            | combine(lookup('ansible.builtin.file', 'fixtures/facts_fresh_overrides.yml') | from_yaml)
+          }}
+        ocp_hcp_kubevirt_prereqs_install_planned: [mce, virtualization, metallb]
+        ocp_hcp_kubevirt_prereqs_metallb_address_pools: [192.0.2.240-192.0.2.250]
+        ocp_hcp_kubevirt_prereqs_report_path: "{{ sos_artifacts }}/report_fresh.json"
+
+    - name: Not-ready management cluster stops the play when fail_on_missing is true
+      block:
+        - name: Validate with fail_on_missing
+          ansible.builtin.include_role:
+            name: infra.automation_development_office.ocp_hcp_kubevirt_prereqs
+          vars:
+            ocp_hcp_kubevirt_prereqs_clusters: "{{ sos_offline_clusters }}"
+            ocp_hcp_kubevirt_prereqs_facts: "{{ lookup('ansible.builtin.file', 'fixtures/facts_not_ready.yml') | from_yaml }}"
+
+        - name: Validation should have failed
+          ansible.builtin.set_fact:
+            sos_offline_blocked: false
+      rescue:
+        - name: Record that validation blocked the run
+          ansible.builtin.set_fact:
+            sos_offline_blocked: true
+
+    - name: Assert missing prerequisites block the run
+      ansible.builtin.assert:
+        that:
+          - sos_offline_blocked | bool
+
+    - name: Invalid hosted cluster definitions are rejected
+      block:
+        - name: Render with an invalid definition
+          ansible.builtin.include_role:
+            name: infra.automation_development_office.ocp_hcp_kubevirt_cluster
+          vars:
+            ocp_hcp_kubevirt_cluster_render_only: true
+            ocp_hcp_kubevirt_cluster_render_dir: "{{ sos_artifacts }}/invalid"
+            ocp_hcp_kubevirt_cluster_clusters:
+              - name: clusters
+                namespace: clusters
+                release_image: not-an-image
+                worker_cores: 0
+
+        - name: Invalid definition should have failed
+          ansible.builtin.set_fact:
+            sos_offline_rejected: false
+      rescue:
+        - name: Record that the definition was rejected
+          ansible.builtin.set_fact:
+            sos_offline_rejected: true
+
+    - name: Assert invalid definitions are rejected before any API call
+      ansible.builtin.assert:
+        that:
+          - sos_offline_rejected | bool
+
+    - name: Delete without typed confirmation is refused
+      block:
+        - name: Delete without confirmation
+          ansible.builtin.include_role:
+            name: infra.automation_development_office.ocp_hcp_kubevirt_cluster
+          vars:
+            ocp_hcp_kubevirt_cluster_action: delete
+            ocp_hcp_kubevirt_cluster_name: tenant-a
+            ocp_hcp_kubevirt_cluster_confirm_delete: tenant-b
+            ocp_hcp_kubevirt_cluster_clusters: "{{ sos_offline_clusters }}"
+
+        - name: Delete should have been refused
+          ansible.builtin.set_fact:
+            sos_offline_delete_refused: false
+      rescue:
+        - name: Record that delete was refused
+          ansible.builtin.set_fact:
+            sos_offline_delete_refused: true
+
+    - name: Assert delete needs the typed cluster name
+      ansible.builtin.assert:
+        that:
+          - sos_offline_delete_refused | bool
+
+    - name: Render HostedCluster and NodePool manifests
+      ansible.builtin.include_role:
+        name: infra.automation_development_office.ocp_hcp_kubevirt_cluster
+      vars:
+        ocp_hcp_kubevirt_cluster_render_only: true
+        ocp_hcp_kubevirt_cluster_render_dir: "{{ sos_artifacts }}/rendered"
+        ocp_hcp_kubevirt_cluster_clusters: "{{ sos_offline_clusters }}"

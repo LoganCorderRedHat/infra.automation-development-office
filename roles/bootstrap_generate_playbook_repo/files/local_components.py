@@ -93,10 +93,28 @@ def build_edges(controller):
     return edges, names
 
 
+# Shift on Shift day-2 playbooks change running hosted clusters; run them only
+# when selected on purpose (delete is already excluded as destructive).
+SHIFT_ON_SHIFT_DAY2 = ('shift-on-shift-scale', 'shift-on-shift-update', 'shift-on-shift-access')
+
+
 def is_day2_helper(path, title=''):
-    """One-shot helpers that should not be auto-selected with full RHBK install."""
+    """One-shot helpers that should not be auto-selected with a full install."""
     blob = f'{path} {title}'.lower()
-    return 'enable-realm' in blob
+    return 'enable-realm' in blob or any(marker in blob for marker in SHIFT_ON_SHIFT_DAY2)
+
+
+def day2_reason(path, title=''):
+    blob = f'{path} {title}'.lower()
+    if any(marker in blob for marker in SHIFT_ON_SHIFT_DAY2):
+        return (
+            'Day-2 Shift on Shift action (scale, update, or access) for an existing '
+            'hosted cluster. Select only when you intend to run it.'
+        )
+    return (
+        'Day-2 helper (realm already created/enabled by Deploy RHBK / '
+        'Deploy RHBK Realm). Select only when fixing a disabled realm.'
+    )
 
 
 def build(repo, catalogue, controller, environment):
@@ -153,11 +171,7 @@ def build(repo, catalogue, controller, environment):
             'fields': fields,
             'extra_vars': extra,
             'available': not unsupported,
-            'reason': (
-                'Day-2 helper (realm already created/enabled by Deploy RHBK / '
-                'Deploy RHBK Realm). Select only when fixing a disabled realm.'
-                if is_day2_helper(path, title) else ''
-            ),
+            'reason': day2_reason(path, title) if is_day2_helper(path, title) else '',
             'depends_on': sorted(edges.get(path, set())),
         })
 

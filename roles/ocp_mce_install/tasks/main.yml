@@ -1,0 +1,159 @@
+---
+# yamllint disable rule:line-length
+# Installs the multicluster engine Operator only when it is missing. An
+# existing MultiClusterEngine, or an existing Subscription for the package
+# (ACM creates one), is reused and never changed.
+- name: MCE | Read existing MultiClusterEngine
+  kubernetes.core.k8s_info:
+    api_version: multicluster.openshift.io/v1
+    kind: MultiClusterEngine
+  register: ocp_mce_install__instances
+
+- name: MCE | Read existing Subscriptions
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1alpha1
+    kind: Subscription
+  register: ocp_mce_install__subscriptions
+  when: ocp_mce_install__instances.resources | default([]) | length == 0
+
+# ACM's MultiClusterHub creates the MultiClusterEngine itself.
+- name: MCE | Read ACM MultiClusterHub
+  kubernetes.core.k8s_info:
+    api_version: operator.open-cluster-management.io/v1
+    kind: MultiClusterHub
+  register: ocp_mce_install__hubs
+  when: ocp_mce_install__instances.resources | default([]) | length == 0
+
+- name: MCE | Decide what to install
+  ansible.builtin.set_fact:
+    ocp_mce_install__has_instance: "{{ ocp_mce_install__instances.resources | default([]) | length > 0 }}"
+    ocp_mce_install__acm_managed: "{{ ocp_mce_install__hubs.resources | default([]) | length > 0 }}"
+    ocp_mce_install__has_subscription: >-
+      {{
+        ocp_mce_install__subscriptions.resources | default([])
+        | selectattr('spec.name', 'defined')
+        | selectattr('spec.name', 'equalto', ocp_mce_install_package)
+        | list | length > 0
+      }}
+
+- name: MCE | Subscribe to the multicluster engine Operator
+  when:
+    - not ocp_mce_install__has_instance
+    - not ocp_mce_install__has_subscription
+    - not ocp_mce_install__acm_managed
+  block:
+    # Every catalog source that serves the package; redhat-operators first.
+    - name: MCE | Read the package manifests
+      kubernetes.core.k8s_info:
+        api_version: packages.operators.coreos.com/v1
+        kind: PackageManifest
+        namespace: openshift-marketplace
+        field_selectors:
+          - "metadata.name={{ ocp_mce_install_package }}"
+      register: ocp_mce_install__package
+
+    - name: MCE | Resolve channel and catalog source
+      vars:
+        ocp_mce_install__pms: "{{ ocp_mce_install__package.resources | default([]) }}"
+        ocp_mce_install__pm: >-
+          {{
+            ((ocp_mce_install__pms | selectattr('status.catalogSource', 'equalto', 'redhat-operators') | list)
+             + ocp_mce_install__pms) | first | default({}, true)
+          }}
+      ansible.builtin.set_fact:
+        ocp_mce_install__channel: "{{ ocp_mce_install_channel or (ocp_mce_install__pm.status.defaultChannel | default('')) }}"
+        ocp_mce_install__source: "{{ ocp_mce_install_source or (ocp_mce_install__pm.status.catalogSource | default('')) }}"
+        ocp_mce_install__source_namespace: "{{ ocp_mce_install_source_namespace or (ocp_mce_install__pm.status.catalogSourceNamespace | default('')) }}"
+
+    - name: MCE | Require a channel and catalog source
+      ansible.builtin.assert:
+        that:
+          - ocp_mce_install__channel | length > 0
+          - ocp_mce_install__source | length > 0
+          - ocp_mce_install__source_namespace | length > 0
+        fail_msg: >-
+          Package {{ ocp_mce_install_package }} was not found in any catalog source. Mirror it
+          (disconnected clusters) or set ocp_mce_install_channel, ocp_mce_install_source, and
+          ocp_mce_install_source_namespace.
+        quiet: true
+
+    - name: MCE | Create the Subscription
+      ansible.builtin.include_role:
+        name: infra.automation_development_office.ocp_operator_subscription
+      vars:
+        name_space: "{{ ocp_mce_install_namespace }}"
+        operator_subscription_namespace: "{{ ocp_mce_install_namespace }}"
+        operatorgroup: "{{ ocp_mce_install_operatorgroup }}"
+        all_namespaces_install: false
+        operator_name: "{{ ocp_mce_install_package }}"
+        operator_channel: "{{ ocp_mce_install__channel }}"
+        operator_source: "{{ ocp_mce_install__source }}"
+        operator_source_namespace: "{{ ocp_mce_install__source_namespace }}"
+        operator_csv_contains: multicluster-engine
+        state: present
+
+- name: MCE | Create the MultiClusterEngine
+  when:
+    - not ocp_mce_install__has_instance
+    - not ocp_mce_install__acm_managed
+  block:
+    - name: MCE | Wait for the MultiClusterEngine API
+      kubernetes.core.k8s_info:
+        api_version: apiextensions.k8s.io/v1
+        kind: CustomResourceDefinition
+        name: multiclusterengines.multicluster.openshift.io
+      register: ocp_mce_install__crd
+      until: >-
+        (ocp_mce_install__crd.resources | default([]) | length > 0)
+        and ((ocp_mce_install__crd.resources | first).status.conditions | default([])
+             | selectattr('type', 'equalto', 'Established') | selectattr('status', 'equalto', 'True') | list | length > 0)
+      retries: "{{ ((ocp_mce_install_operator_timeout | int) / (ocp_mce_install_poll_delay | int)) | int }}"
+      delay: "{{ ocp_mce_install_poll_delay | int }}"
+
+    # The operator webhook may need a moment after the API appears.
+    - name: MCE | Create MultiClusterEngine {{ ocp_mce_install_instance_name }}
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: multicluster.openshift.io/v1
+          kind: MultiClusterEngine
+          metadata:
+            name: "{{ ocp_mce_install_instance_name }}"
+          spec: {}
+      register: ocp_mce_install__create
+      until: ocp_mce_install__create is succeeded
+      retries: 20
+      delay: "{{ ocp_mce_install_poll_delay | int }}"
+
+- name: MCE | Wait for the MultiClusterEngine to report Available
+  kubernetes.core.k8s_info:
+    api_version: multicluster.openshift.io/v1
+    kind: MultiClusterEngine
+  register: ocp_mce_install__status
+  until: >-
+    (ocp_mce_install__status.resources | default([]) | length > 0)
+    and ((ocp_mce_install__status.resources | first).status.phase | default('')) == 'Available'
+  retries: "{{ ((ocp_mce_install_instance_timeout | int) / (ocp_mce_install_poll_delay | int)) | int }}"
+  delay: "{{ ocp_mce_install_poll_delay | int }}"
+
+- name: MCE | Wait for the HyperShift Operator
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: operator
+    namespace: "{{ ocp_mce_install_hypershift_namespace }}"
+  register: ocp_mce_install__hypershift
+  until: >-
+    (ocp_mce_install__hypershift.resources | default([]) | length > 0)
+    and ((ocp_mce_install__hypershift.resources | first).status.conditions | default([])
+         | selectattr('type', 'equalto', 'Available') | selectattr('status', 'equalto', 'True') | list | length > 0)
+  retries: "{{ ((ocp_mce_install_hypershift_timeout | int) / (ocp_mce_install_poll_delay | int)) | int }}"
+  delay: "{{ ocp_mce_install_poll_delay | int }}"
+  when: ocp_mce_install_wait_hypershift | bool
+
+- name: MCE | Ready
+  ansible.builtin.debug:
+    msg: >-
+      multicluster engine Operator
+      {{ (ocp_mce_install__status.resources | first).status.currentVersion | default('') }} is
+      {{ 'Available (existing installation reused).' if ocp_mce_install__has_instance else 'Available.' }}

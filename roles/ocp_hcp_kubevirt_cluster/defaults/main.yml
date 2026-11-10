@@ -1,0 +1,90 @@
+---
+# Hosted cluster lifecycle for the KubeVirt platform (Shift on Shift).
+# See docs/SHIFT_ON_SHIFT.md for the definition keys.
+
+# deploy | status | scale | update | access | delete
+ocp_hcp_kubevirt_cluster_action: deploy
+# Hosted cluster definitions (same keys as ocp_hcp_kubevirt_prereqs_clusters).
+ocp_hcp_kubevirt_cluster_clusters: []
+ocp_hcp_kubevirt_cluster_cluster_defaults: {}
+# Target hosted cluster. Empty means every definition for deploy and status;
+# scale, update, access, and delete need exactly one target.
+ocp_hcp_kubevirt_cluster_name: ""
+# Pull secret JSON per cluster name (pull_secret_source=vault). Vault only.
+ocp_hcp_kubevirt_cluster_pull_secrets: {}
+
+# deploy: run ocp_hcp_kubevirt_prereqs first and stop on missing prerequisites.
+ocp_hcp_kubevirt_cluster_validate: true
+# deploy: install missing prerequisites before creating hosted clusters:
+# multicluster engine Operator (channel picked from the support matrix, with
+# HyperShift), OpenShift Virtualization, MetalLB with the address pools
+# below, and wildcard route admission. Existing installations are reused.
+# Nothing is installed when a prerequisite that cannot be installed (storage,
+# workers, versions, permissions) is missing. Off by default for direct role
+# use; Preflight turns it on for Shift on Shift.
+ocp_hcp_kubevirt_cluster_install_prerequisites: false
+# MetalLB address ranges used only when MetalLB is not set up yet, for
+# example ["192.168.10.240-192.168.10.250"] or ["192.168.10.240/28"].
+ocp_hcp_kubevirt_cluster_metallb_address_pools: []
+ocp_hcp_kubevirt_cluster_metallb_pool_name: shift-on-shift
+# Set routeAdmission.wildcardPolicy=WildcardsAllowed on the default
+# IngressController (needed for the default hosted ingress). Implied by
+# install_prerequisites.
+ocp_hcp_kubevirt_cluster_manage_wildcard_route_admission: false
+# Lab-only pass-through to the prerequisite check (unsupported platforms).
+ocp_hcp_kubevirt_cluster_allow_unsupported_platform: false
+ocp_hcp_kubevirt_cluster_load_balancer_check: metallb
+# Recreate the default NodePool only when an ADO-created HostedCluster
+# exists without it (for example after an interrupted first run).
+ocp_hcp_kubevirt_cluster_create_missing_nodepool: true
+ocp_hcp_kubevirt_cluster_wait: true
+ocp_hcp_kubevirt_cluster_poll_delay: 30
+ocp_hcp_kubevirt_cluster_hc_timeout_minutes: 30
+ocp_hcp_kubevirt_cluster_nodepool_timeout_minutes: 45
+ocp_hcp_kubevirt_cluster_version_timeout_minutes: 45
+ocp_hcp_kubevirt_cluster_update_timeout_minutes: 90
+ocp_hcp_kubevirt_cluster_delete_timeout_minutes: 30
+# Query the hosted API (nodes, cluster operators) with the admin kubeconfig.
+# Connection problems are reported, not fatal: management-side conditions
+# already decide readiness.
+ocp_hcp_kubevirt_cluster_verify_hosted_api: true
+
+# Write manifests instead of applying them (review / GitOps / offline tests).
+ocp_hcp_kubevirt_cluster_render_only: false
+ocp_hcp_kubevirt_cluster_render_dir: ""
+
+# scale: "" leaves a value unchanged.
+ocp_hcp_kubevirt_cluster_nodepool_name: ""
+ocp_hcp_kubevirt_cluster_replicas: ""
+ocp_hcp_kubevirt_cluster_autoscaling_min: ""
+ocp_hcp_kubevirt_cluster_autoscaling_max: ""
+
+# update: release changes also need ocp_hcp_kubevirt_cluster_confirm_update.
+ocp_hcp_kubevirt_cluster_target_release_image: ""
+# Version of a digest-pinned target image (for compatibility checks).
+ocp_hcp_kubevirt_cluster_target_version: ""
+ocp_hcp_kubevirt_cluster_update_nodepools: false
+# Node pool release image; defaults to the hosted cluster release image.
+ocp_hcp_kubevirt_cluster_nodepool_release_image: ""
+ocp_hcp_kubevirt_cluster_channel: ""
+# "" leaves autoRepair unchanged; true/false sets it.
+ocp_hcp_kubevirt_cluster_auto_repair: ""
+ocp_hcp_kubevirt_cluster_confirm_update: false
+# Adds hypershift.openshift.io/force-upgrade-to as in the documented control
+# plane update procedure. Off unless the operator chooses it.
+ocp_hcp_kubevirt_cluster_force_upgrade: false
+# Support matrix override for update checks (empty = built-in 4.22 matrix).
+ocp_hcp_kubevirt_cluster_support_matrix: {}
+
+# access: optional local path for the admin kubeconfig (mode 0600). Contents
+# are never printed.
+ocp_hcp_kubevirt_cluster_kubeconfig_dest: ""
+
+# delete: must equal the hosted cluster name.
+ocp_hcp_kubevirt_cluster_confirm_delete: ""
+# Also delete the namespace when ADO created it and it holds no other
+# hosted clusters.
+ocp_hcp_kubevirt_cluster_delete_namespace: false
+
+# Optional JSON file with non-secret results.
+ocp_hcp_kubevirt_cluster_result_path: ""

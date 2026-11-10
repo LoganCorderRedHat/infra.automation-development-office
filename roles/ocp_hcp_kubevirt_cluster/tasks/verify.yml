@@ -1,0 +1,58 @@
+---
+# yamllint disable rule:line-length
+# Direct checks through the hosted API. Readiness is already decided from
+# management-side status; failures here are reported, not fatal (the hosted
+# API may not be routable from the automation environment).
+- name: Shift on Shift verify | Query the hosted API
+  block:
+    - name: Shift on Shift verify | Prepare hosted API connection
+      ansible.builtin.include_tasks: hosted_api_auth.yml
+
+    - name: Shift on Shift verify | Read hosted nodes and cluster operators | {{ ocp_hcp_kubevirt_cluster__def.name }}
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ ocp_hcp_kubevirt_cluster__hosted_kubeconfig }}"
+        context: "{{ ocp_hcp_kubevirt_cluster__hosted_auth.context }}"
+        host: "{{ ocp_hcp_kubevirt_cluster__hosted_auth.host }}"
+        api_key: "{{ ocp_hcp_kubevirt_cluster__hosted_auth.api_key }}"
+        validate_certs: "{{ ocp_hcp_kubevirt_cluster__hosted_auth.validate_certs }}"
+        ca_cert: "{{ ocp_hcp_kubevirt_cluster__hosted_ca_file | default(omit, true) }}"
+        api_version: "{{ item.api_version }}"
+        kind: "{{ item.kind }}"
+      loop:
+        - {api_version: v1, kind: Node}
+        - {api_version: config.openshift.io/v1, kind: ClusterOperator}
+        - {api_version: config.openshift.io/v1, kind: ClusterVersion}
+      register: ocp_hcp_kubevirt_cluster__hosted_reads
+      no_log: true
+
+    - name: Shift on Shift verify | Summarize hosted cluster health | {{ ocp_hcp_kubevirt_cluster__def.name }}
+      vars:
+        ocp_hcp_kubevirt_cluster__nodes: "{{ ocp_hcp_kubevirt_cluster__hosted_reads.results[0].resources | infra.automation_development_office.hcp_kubevirt_node_facts }}"
+        ocp_hcp_kubevirt_cluster__cos: "{{ ocp_hcp_kubevirt_cluster__hosted_reads.results[1].resources | infra.automation_development_office.hcp_kubevirt_cluster_operator_facts }}"
+        ocp_hcp_kubevirt_cluster__cv: "{{ (ocp_hcp_kubevirt_cluster__hosted_reads.results[2].resources | first) | default({}, true) }}"
+      ansible.builtin.set_fact:
+        ocp_hcp_kubevirt_cluster__verify:
+          reachable: true
+          version: "{{ ocp_hcp_kubevirt_cluster__cv.status.desired.version | default('') }}"
+          nodes_total: "{{ ocp_hcp_kubevirt_cluster__nodes | length }}"
+          nodes_ready: "{{ ocp_hcp_kubevirt_cluster__nodes | selectattr('ready') | list | length }}"
+          unhealthy_cluster_operators: >-
+            {{
+              ocp_hcp_kubevirt_cluster__cos
+              | rejectattr('available', 'true') | map(attribute='name') | list
+              + (ocp_hcp_kubevirt_cluster__cos | selectattr('degraded', 'true') | map(attribute='name') | list)
+              | unique
+            }}
+        ocp_hcp_kubevirt_cluster__hosted_reads: {}
+  rescue:
+    - name: Shift on Shift verify | Record unreachable hosted API | {{ ocp_hcp_kubevirt_cluster__def.name }}
+      ansible.builtin.set_fact:
+        ocp_hcp_kubevirt_cluster__verify:
+          reachable: false
+          message: >-
+            Could not query the hosted API from the automation environment (details hidden because
+            the admin kubeconfig was in use). Management-side status decides readiness; check that
+            the hosted API address is routable from this execution environment.
+  always:
+    - name: Shift on Shift verify | Clean up hosted API connection
+      ansible.builtin.include_tasks: hosted_api_cleanup.yml

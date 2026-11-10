@@ -776,6 +776,11 @@ def copy_repo_file_from_path(src, filename, default_name):
 def merge_component(component, cfg):
     if not isinstance(cfg, dict):
         return
+    # vars_/vault_shift_on_shift.yml are fully written by the templates. The
+    # generic merge would copy cluster keys to top-level vars and pull secrets
+    # (inside the clusters list) into the unencrypted vars file.
+    if component == "shift_on_shift":
+        return
 
     # Playbooks historically load vault_dirsrv.yml / vars_dirsrv.yml
     # while the registry component key is "389ds".

@@ -1,0 +1,30 @@
+---
+# yamllint disable rule:line-length
+# Writes the manifests ADO would apply. Secrets are listed by name only.
+- name: Shift on Shift render | Require a render directory
+  ansible.builtin.assert:
+    that:
+      - ocp_hcp_kubevirt_cluster_render_dir | length > 0
+    fail_msg: Set ocp_hcp_kubevirt_cluster_render_dir when ocp_hcp_kubevirt_cluster_render_only is true.
+    quiet: true
+
+- name: Shift on Shift render | Create directory | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.file:
+    path: "{{ ocp_hcp_kubevirt_cluster_render_dir }}/{{ ocp_hcp_kubevirt_cluster__def.name }}"
+    state: directory
+    mode: "0750"
+
+- name: Shift on Shift render | Write manifests | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.copy:
+    content: "{{ item.content | to_nice_yaml(indent=2, sort_keys=true) }}"
+    dest: "{{ ocp_hcp_kubevirt_cluster_render_dir }}/{{ ocp_hcp_kubevirt_cluster__def.name }}/{{ item.file }}"
+    mode: "0640"
+  loop:
+    - file: hostedcluster.yaml
+      content: "{{ ocp_hcp_kubevirt_cluster__def | infra.automation_development_office.hcp_kubevirt_hostedcluster_manifest }}"
+    - file: nodepool.yaml
+      content: "{{ ocp_hcp_kubevirt_cluster__def | infra.automation_development_office.hcp_kubevirt_nodepool_manifest }}"
+    - file: supporting-objects.yaml
+      content: "{{ ocp_hcp_kubevirt_cluster__def | infra.automation_development_office.hcp_kubevirt_supporting_objects }}"
+  loop_control:
+    label: "{{ item.file }}"

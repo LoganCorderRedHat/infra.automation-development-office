@@ -1,0 +1,14 @@
+---
+ocp_hcp_kubevirt_cluster__actions:
+  - deploy
+  - status
+  - scale
+  - update
+  - access
+  - delete
+# Actions that must name exactly one hosted cluster.
+ocp_hcp_kubevirt_cluster__single_target_actions:
+  - scale
+  - update
+  - access
+  - delete

@@ -1,0 +1,102 @@
+---
+# yamllint disable rule:line-length
+# Example vars_shift_on_shift.yml (what Preflight generates, with every key).
+# No real values: replace the placeholders. Keep pull secrets out of this file;
+# put them in the encrypted vault_shift_on_shift.yml:
+#
+#   shift_on_shift_pull_secrets:
+#     tenant-b: '{"auths": {"mirror.example.com:5000": {"auth": "<base64 user:password>"}}}'
+
+shift_on_shift_clusters:
+  # Connected cluster on the default ingress (*.apps.tenant-a.<management apps domain>).
+  - name: tenant-a
+    namespace: clusters
+    release_image: quay.io/openshift-release-dev/ocp-release:4.22.0-multi
+    pull_secret_source: management_cluster   # management_cluster | vault | existing_secret
+    controller_availability_policy: HighlyAvailable   # or SingleReplica (labs)
+    api_publishing: LoadBalancer             # LoadBalancer (MetalLB) | NodePort
+    worker_count: 3
+    worker_cores: 4
+    worker_memory: 16Gi
+    root_volume_size: 64Gi
+    root_volume_storage_class: <rwx-block-storage-class>
+    etcd_storage_class: <lvm-storage-class>
+    require_live_migration: true             # sets ReadWriteMany + Block root volumes
+    ssh_public_key: ""                       # optional OpenSSH public key for core@ workers
+
+  # Disconnected cluster with its own base domain and a vault pull secret.
+  - name: tenant-b
+    namespace: clusters
+    release_image: <mirror-registry>:5000/openshift/release-images@sha256:<digest>
+    hosted_version: 4.22.0                   # required for digest-pinned images
+    pull_secret_source: vault
+    base_domain: tenants.example.com         # DNS: api.tenant-b.tenants.example.com, *.apps.tenant-b.tenants.example.com
+    create_apps_load_balancer: true          # creates tenant-b-apps LoadBalancer Service
+    controller_availability_policy: HighlyAvailable
+    cluster_network_cidr: 10.132.0.0/14
+    service_network_cidr: 172.31.0.0/16
+    machine_network_cidr: ""
+    etcd_storage_size: 8Gi
+    nodepool_name: tenant-b-workers
+    worker_count: 2                          # or autoscaling_min / autoscaling_max
+    autoscaling_min: 0
+    autoscaling_max: 0
+    worker_cores: 8
+    worker_memory: 32Gi
+    root_volume_size: 120Gi
+    root_volume_access_mode: ReadWriteMany   # ReadWriteMany | ReadWriteOnce
+    root_volume_volume_mode: Block           # Block | Filesystem
+    root_volume_cache_strategy: None         # None | PVC
+    network_multiqueue: Enable               # Disable when the MTU is below 9000
+    qos_class: Burstable                     # Burstable | Guaranteed
+    vm_node_selector: {}
+    additional_networks: []                  # <namespace>/<NetworkAttachmentDefinition>
+    attach_default_network: true
+    node_upgrade_type: Replace               # Replace | InPlace (immutable)
+    auto_repair: false
+    storage_class_mappings:                  # kubevirt-csi: infra RWX class -> guest class
+      - infra_storage_class: <rwx-block-storage-class>
+        guest_storage_class: tenant-block
+    volume_snapshot_class_mappings: []
+    capabilities_disabled: []                # ImageRegistry, openshift-samples, Insights, baremetal, Console, NodeTuning, Ingress
+    capabilities_enabled: []
+    channel: stable-4.22
+    fips: false                              # needs a FIPS management cluster
+    disconnected:
+      enabled: true
+      image_content_sources:
+        - source: quay.io/openshift-release-dev/ocp-release
+          mirrors:
+            - <mirror-registry>:5000/openshift/release-images
+        - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+          mirrors:
+            - <mirror-registry>:5000/openshift/release
+      additional_trust_bundle: |
+        -----BEGIN CERTIFICATE-----
+        <mirror registry CA>
+        -----END CERTIFICATE-----
+      olm_catalog_placement: management      # management | guest
+      disable_default_sources: true
+      olm_catalog_images:
+        redhat_operators: <mirror-registry>:5000/redhat/redhat-operator-index:v4.22
+        certified_operators: ""
+        community_operators: ""
+        redhat_marketplace: ""
+      olm_registry_overrides: ""
+
+# Values merged under every cluster (per-cluster keys win).
+shift_on_shift_cluster_defaults: {}
+# Explicit opt-in: let the deploy job allow wildcard routes on the default
+# IngressController (needed for the default hosted ingress).
+# Deploy installs missing prerequisites first (multicluster engine Operator,
+# OpenShift Virtualization, MetalLB, wildcard route admission).
+shift_on_shift_install_prerequisites: true
+# Free addresses for MetalLB, used only when MetalLB is not set up yet.
+shift_on_shift_metallb_address_pools:
+  - 192.0.2.240-192.0.2.250
+shift_on_shift_manage_wildcard_route_admission: false   # implied by install_prerequisites
+# Lab only: report a non bare metal management cluster as UNSUPPORTED instead of failing.
+shift_on_shift_allow_unsupported_platform: false
+shift_on_shift_load_balancer_check: metallb   # metallb | skip
+shift_on_shift_validate_before_deploy: true
+shift_on_shift_verify_hosted_api: true

@@ -1,0 +1,52 @@
+---
+# yamllint disable rule:line-length
+# Shared read of the HostedCluster and its NodePools for the current
+# definition (ocp_hcp_kubevirt_cluster__def).
+- name: Shift on Shift | Read HostedCluster | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  kubernetes.core.k8s_info:
+    api_version: hypershift.openshift.io/v1beta1
+    kind: HostedCluster
+    name: "{{ ocp_hcp_kubevirt_cluster__def.name }}"
+    namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+  register: ocp_hcp_kubevirt_cluster__hc_lookup
+
+- name: Shift on Shift | Read NodePools | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  kubernetes.core.k8s_info:
+    api_version: hypershift.openshift.io/v1beta1
+    kind: NodePool
+    namespace: "{{ ocp_hcp_kubevirt_cluster__def.namespace }}"
+  register: ocp_hcp_kubevirt_cluster__np_lookup
+
+- name: Shift on Shift | Read management apps domain | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  kubernetes.core.k8s_info:
+    api_version: operator.openshift.io/v1
+    kind: IngressController
+    name: default
+    namespace: openshift-ingress-operator
+  register: ocp_hcp_kubevirt_cluster__ingress_lookup
+
+- name: Shift on Shift | Record lookup | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__hc: "{{ (ocp_hcp_kubevirt_cluster__hc_lookup.resources | default([]) | first) | default({}, true) }}"
+    ocp_hcp_kubevirt_cluster__nodepools: >-
+      {{
+        ocp_hcp_kubevirt_cluster__np_lookup.resources | default([])
+        | selectattr('spec.clusterName', 'defined')
+        | selectattr('spec.clusterName', 'equalto', ocp_hcp_kubevirt_cluster__def.name)
+        | list
+      }}
+    ocp_hcp_kubevirt_cluster__mgmt_apps_domain: >-
+      {{
+        ((ocp_hcp_kubevirt_cluster__ingress_lookup.resources | default([]) | first) | default({}, true)).status.domain
+        | default('')
+      }}
+
+- name: Shift on Shift | Refuse to manage a HostedCluster on another platform | {{ ocp_hcp_kubevirt_cluster__def.name }}
+  ansible.builtin.assert:
+    that:
+      - ocp_hcp_kubevirt_cluster__hc | length == 0 or ocp_hcp_kubevirt_cluster__hc.spec.platform.type | default('') == 'KubeVirt'
+    fail_msg: >-
+      HostedCluster {{ ocp_hcp_kubevirt_cluster__def.namespace }}/{{ ocp_hcp_kubevirt_cluster__def.name }}
+      exists with platform '{{ ocp_hcp_kubevirt_cluster__hc.spec.platform.type | default('unknown') }}'.
+      Shift on Shift manages only KubeVirt hosted clusters and will not touch it.
+    quiet: true

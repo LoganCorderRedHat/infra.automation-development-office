@@ -1,0 +1,49 @@
+---
+minor_changes:
+  - >-
+    ocp_hcp_kubevirt_prereqs - New read-only role that validates a management
+    cluster for hosted control planes on OpenShift Virtualization (Shift on
+    Shift): OpenShift version and health, bare metal platform, workers and
+    capacity, OVN-Kubernetes and MTU, multicluster engine Operator and
+    HyperShift components, OpenShift Virtualization, storage and live
+    migration, wildcard routes, MetalLB, permissions, pull secrets, FIPS, the
+    OpenShift 4.22 hosted control planes support matrix, and disconnected
+    mirrors. Missing prerequisites are reported separately from optional
+    optimizations.
+  - >-
+    ocp_hcp_kubevirt_cluster - New role that deploys, inspects, scales,
+    updates, gives access details for, and deletes KubeVirt-platform hosted
+    clusters through the ``hypershift.openshift.io/v1beta1`` API. Existing
+    HostedClusters are never re-applied or recreated, release updates follow
+    the documented order and version skew rules with explicit confirmation,
+    and deletion needs the typed cluster name. With
+    ``ocp_hcp_kubevirt_cluster_install_prerequisites`` (on by default in
+    Preflight) deploy first installs missing prerequisites: the multicluster
+    engine Operator on a support-matrix channel (chosen across every catalog
+    source that serves it, preferring redhat-operators), OpenShift
+    Virtualization,
+    MetalLB with a given address pool, and wildcard route admission.
+  - >-
+    ocp_mce_install - New role that installs the multicluster engine Operator
+    and a MultiClusterEngine, reusing an existing installation or ACM, and
+    waits for the HyperShift Operator.
+  - >-
+    ocp_metallb_install - New ``ocp_metallb_install_operator`` variable
+    (default ``true``) to skip the operator subscription when MetalLB is
+    already subscribed.
+  - >-
+    hcp_kubevirt - New filter plugin with the Shift on Shift input
+    validation, prerequisite evaluation, HostedCluster/NodePool rendering, and
+    the OpenShift 4.22 support matrix.
+  - >-
+    bootstrap - New ``shift_on_shift`` OpenShift app: preflight
+    ``component_config.shift_on_shift`` generates ``vars_shift_on_shift.yml``
+    (no secrets), ``vault_shift_on_shift.yml`` (vault-sourced pull secrets),
+    seven playbooks under ``playbooks/shift_on_shift/``, and seven Controller
+    job templates. The local runner recommends only validate, deploy, and
+    status.
+doc_changes:
+  - >-
+    Add ``docs/SHIFT_ON_SHIFT.md`` with prerequisites, deployment, validation,
+    scaling, updates, troubleshooting, removal, end-to-end testing, a sample
+    vars file, and a least-privilege RBAC example.

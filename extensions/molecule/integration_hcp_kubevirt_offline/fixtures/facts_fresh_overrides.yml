@@ -1,0 +1,29 @@
+---
+# yamllint disable rule:line-length
+# Merged over facts_ready.yml (top-level keys replaced): a bare metal cluster
+# without the multicluster engine Operator, OpenShift Virtualization, or
+# MetalLB, whose packages are available from the catalog. Deploy with
+# install_prerequisites installs them, so validation reports them as planned.
+crds: {hostedclusters: false, nodepools: false, mce: false, hco: false, kubevirt: false, cdi: false, storageprofiles: false,
+       managedclusters: false, managedclusteraddons: false, metallb: false, ipaddresspools: false, l2advertisements: false,
+       bgpadvertisements: false, idms: true, icsp: true, volumesnapshotclasses: true, consoleclidownloads: false}
+mce: {present: false}
+hypershift_operator: {present: false, available: false}
+supported_versions: []
+local_cluster: {present: false}
+managed_clusters: []
+hypershift_addon: {checked: false}
+cnv: {present: false}
+storage_profiles: {}
+metallb: {instance_present: false, pools: 0, advertisements: 0}
+packages:
+  mce:
+    metadata: {name: multicluster-engine}
+    status: {catalogSource: redhat-operators, catalogSourceNamespace: openshift-marketplace, defaultChannel: stable-2.17,
+             channels: [{name: stable-2.11}, {name: stable-2.17}]}
+  virtualization:
+    metadata: {name: kubevirt-hyperconverged}
+    status: {catalogSource: redhat-operators, catalogSourceNamespace: openshift-marketplace, defaultChannel: stable, channels: [{name: stable}]}
+  metallb:
+    metadata: {name: metallb-operator}
+    status: {catalogSource: redhat-operators, catalogSourceNamespace: openshift-marketplace, defaultChannel: stable, channels: [{name: stable}]}

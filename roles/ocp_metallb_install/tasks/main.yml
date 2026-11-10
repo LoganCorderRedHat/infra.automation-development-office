@@ -7,29 +7,35 @@
 
 # ── Operator install ─────────────────────────────────────────────────
 
-- name: MetalLB | Install MetalLB Operator
-  ansible.builtin.include_role:
-    name: infra.automation_development_office.ocp_operator_subscription
-  vars:
-    name_space: "{{ ocp_metallb_namespace }}"
-    operator_subscription_namespace: "{{ ocp_metallb_namespace }}"
-    operatorgroup: metallb-operator
-    operator_name: "{{ ocp_metallb_operator_name }}"
-    operator_channel: "{{ ocp_metallb_operator_channel }}"
-    operator_source: "{{ ocp_metallb_operator_source }}"
-    operator_source_namespace: "{{ ocp_metallb_operator_source_namespace }}"
-    all_namespaces_install: false
-    state: present
+- name: MetalLB | Install and wait for the operator
+  when: ocp_metallb_install_operator | bool
+  block:
+    - name: MetalLB | Install MetalLB Operator
+      ansible.builtin.include_role:
+        name: infra.automation_development_office.ocp_operator_subscription
+      vars:
+        name_space: "{{ ocp_metallb_namespace }}"
+        operator_subscription_namespace: "{{ ocp_metallb_namespace }}"
+        operatorgroup: metallb-operator
+        operator_name: "{{ ocp_metallb_operator_name }}"
+        operator_channel: "{{ ocp_metallb_operator_channel }}"
+        operator_source: "{{ ocp_metallb_operator_source }}"
+        operator_source_namespace: "{{ ocp_metallb_operator_source_namespace }}"
+        # The MetalLB Operator supports only the AllNamespaces install mode;
+        # an OperatorGroup that targets metallb-system fails the CSV with
+        # UnsupportedOperatorGroup (OwnNamespace not supported).
+        all_namespaces_install: true
+        state: present
 
-- name: MetalLB | Wait for operator readiness
-  ansible.builtin.include_role:
-    name: infra.automation_development_office.ocp_wait_operator
-  vars:
-    name_space: "{{ ocp_metallb_namespace }}"
-    operator_namespace: "{{ ocp_metallb_namespace }}"
-    operator_name: "{{ ocp_metallb_operator_name }}"
-    operator_deployment_pattern: metallb
-    state: present
+    - name: MetalLB | Wait for operator readiness
+      ansible.builtin.include_role:
+        name: infra.automation_development_office.ocp_wait_operator
+      vars:
+        name_space: "{{ ocp_metallb_namespace }}"
+        operator_namespace: "{{ ocp_metallb_namespace }}"
+        operator_name: "{{ ocp_metallb_operator_name }}"
+        operator_deployment_pattern: metallb
+        state: present
 
 # ── MetalLB instance ─────────────────────────────────────────────────
 

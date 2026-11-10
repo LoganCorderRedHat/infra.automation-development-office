@@ -110,7 +110,7 @@
                       'devspaces', 'dev_hub', 'dirsrv', 'eck', 'gitops', 'gitlab',
                       'grafana', 'kafka', 'minio', 'netbox', 'oadp',
                       'ocp_compliance', 'ocp_virtualization', 'openshift',
-                      'pega', 'quay', 'rhbk', 'zabbix'
+                      'pega', 'quay', 'rhbk', 'shift_on_shift', 'zabbix'
                     ])
                   )
               )
@@ -1518,12 +1518,19 @@
         | list
       )
 
+# Every key comes from the Preflight OpenShift connection, so a Preflight run
+# always rewrites it (like aap_config_vars.yml); otherwise playbooks keep
+# calling the previous cluster's API after the form changes.
 - name: Write shared OpenShift infra_config_vars.yml
   ansible.builtin.template:
     src: infra_config_vars.yml.j2
     dest: "{{ bootstrap_generate_env_vars_env_dir }}/infra_config_vars.yml"
     mode: "0600"
-    force: "{{ bootstrap_generate_env_vars_force | bool }}"
+    force: >-
+      {{
+        bootstrap_generate_env_vars_force | bool
+        or bootstrap_generate_env_vars_preflight is defined
+      }}
 
 - name: Write component vars files
   ansible.builtin.template:

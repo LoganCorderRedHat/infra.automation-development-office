@@ -1,0 +1,22 @@
+---
+# Install the multicluster engine Operator (MCE) and its MultiClusterEngine
+# resource. Existing installations are reused: a MultiClusterEngine that
+# already exists, or a Subscription for the package (for example from ACM).
+ocp_mce_install_namespace: multicluster-engine
+ocp_mce_install_package: multicluster-engine
+ocp_mce_install_operatorgroup: multicluster-engine-operatorgroup
+# Empty values are read from the package's PackageManifest (default channel
+# and catalog source), which also covers mirrored catalogs.
+ocp_mce_install_channel: ""
+ocp_mce_install_source: ""
+ocp_mce_install_source_namespace: ""
+ocp_mce_install_instance_name: multiclusterengine
+# Wait for the HyperShift Operator (hosted control planes) after the
+# MultiClusterEngine reports Available.
+ocp_mce_install_wait_hypershift: true
+ocp_mce_install_hypershift_namespace: hypershift
+# Timeouts in seconds.
+ocp_mce_install_operator_timeout: 1200
+ocp_mce_install_instance_timeout: 1800
+ocp_mce_install_hypershift_timeout: 900
+ocp_mce_install_poll_delay: 15

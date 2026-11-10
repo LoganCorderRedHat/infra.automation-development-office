@@ -1,0 +1,119 @@
+---
+# yamllint disable rule:line-length
+- name: Shift on Shift | Validate action
+  ansible.builtin.assert:
+    that:
+      - ocp_hcp_kubevirt_cluster_action in ocp_hcp_kubevirt_cluster__actions
+    fail_msg: >-
+      ocp_hcp_kubevirt_cluster_action must be one of
+      {{ ocp_hcp_kubevirt_cluster__actions | join(', ') }}
+      (got '{{ ocp_hcp_kubevirt_cluster_action }}').
+    quiet: true
+
+- name: Shift on Shift | Normalize hosted cluster definitions
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__definitions: >-
+      {{
+        ocp_hcp_kubevirt_cluster_clusters
+        | infra.automation_development_office.hcp_kubevirt_cluster_definitions(
+            ocp_hcp_kubevirt_cluster_cluster_defaults,
+            ocp_hcp_kubevirt_cluster_name
+          )
+      }}
+    ocp_hcp_kubevirt_cluster_results: []
+    ocp_hcp_kubevirt_cluster__manage_wildcard: >-
+      {{
+        ocp_hcp_kubevirt_cluster_manage_wildcard_route_admission | bool
+        or ocp_hcp_kubevirt_cluster_install_prerequisites | bool
+      }}
+
+- name: Shift on Shift | Fail on invalid hosted cluster definitions
+  ansible.builtin.assert:
+    that:
+      - ocp_hcp_kubevirt_cluster__definitions.clusters | length > 0
+      - ocp_hcp_kubevirt_cluster__definitions.errors | length == 0
+    fail_msg: >-
+      {{
+        (ocp_hcp_kubevirt_cluster__definitions.errors | join('; '))
+        if ocp_hcp_kubevirt_cluster__definitions.errors
+        else 'No hosted clusters are defined (ocp_hcp_kubevirt_cluster_clusters).'
+      }}
+    quiet: true
+
+- name: Shift on Shift | Require a single target for this action
+  ansible.builtin.assert:
+    that:
+      - ocp_hcp_kubevirt_cluster__definitions.clusters | length == 1
+    fail_msg: >-
+      Action '{{ ocp_hcp_kubevirt_cluster_action }}' changes one hosted cluster
+      at a time. Set ocp_hcp_kubevirt_cluster_name to one of:
+      {{ ocp_hcp_kubevirt_cluster__definitions.clusters | map(attribute='name') | join(', ') }}.
+    quiet: true
+  when:
+    - ocp_hcp_kubevirt_cluster_action in ocp_hcp_kubevirt_cluster__single_target_actions
+    - not ocp_hcp_kubevirt_cluster_render_only | bool
+
+- name: Shift on Shift | Render manifests only
+  ansible.builtin.include_tasks: render.yml
+  loop: "{{ ocp_hcp_kubevirt_cluster__definitions.clusters }}"
+  loop_control:
+    loop_var: ocp_hcp_kubevirt_cluster__def
+    label: "{{ ocp_hcp_kubevirt_cluster__def.name }}"
+  when: ocp_hcp_kubevirt_cluster_render_only | bool
+
+- name: Shift on Shift | Install missing prerequisites
+  ansible.builtin.include_tasks: install_prerequisites.yml
+  when:
+    - ocp_hcp_kubevirt_cluster_action == 'deploy'
+    - ocp_hcp_kubevirt_cluster_install_prerequisites | bool
+    - not ocp_hcp_kubevirt_cluster_render_only | bool
+
+- name: Shift on Shift | Validate prerequisites before deploy
+  ansible.builtin.include_role:
+    name: infra.automation_development_office.ocp_hcp_kubevirt_prereqs
+  vars:
+    ocp_hcp_kubevirt_prereqs_clusters: "{{ ocp_hcp_kubevirt_cluster_clusters }}"
+    ocp_hcp_kubevirt_prereqs_cluster_defaults: "{{ ocp_hcp_kubevirt_cluster_cluster_defaults }}"
+    ocp_hcp_kubevirt_prereqs_cluster_name: "{{ ocp_hcp_kubevirt_cluster_name }}"
+    ocp_hcp_kubevirt_prereqs_pull_secrets: "{{ ocp_hcp_kubevirt_cluster_pull_secrets }}"
+    ocp_hcp_kubevirt_prereqs_wildcard_remediation_planned: "{{ ocp_hcp_kubevirt_cluster__manage_wildcard | bool }}"
+    ocp_hcp_kubevirt_prereqs_allow_unsupported_platform: "{{ ocp_hcp_kubevirt_cluster_allow_unsupported_platform | bool }}"
+    ocp_hcp_kubevirt_prereqs_load_balancer_check: "{{ ocp_hcp_kubevirt_cluster_load_balancer_check }}"
+    ocp_hcp_kubevirt_prereqs_support_matrix: "{{ ocp_hcp_kubevirt_cluster_support_matrix }}"
+    ocp_hcp_kubevirt_prereqs_fail_on_missing: true
+  when:
+    - ocp_hcp_kubevirt_cluster_action == 'deploy'
+    - ocp_hcp_kubevirt_cluster_validate | bool
+    - not ocp_hcp_kubevirt_cluster_render_only | bool
+
+- name: Shift on Shift | Enable wildcard route admission (opt-in or install_prerequisites)
+  ansible.builtin.include_tasks: wildcard_routes.yml
+  when:
+    - ocp_hcp_kubevirt_cluster_action == 'deploy'
+    - ocp_hcp_kubevirt_cluster__manage_wildcard | bool
+    - not ocp_hcp_kubevirt_cluster_render_only | bool
+    - ocp_hcp_kubevirt_cluster__definitions.clusters | selectattr('base_domain_passthrough') | list | length > 0
+
+- name: Shift on Shift | Run action per hosted cluster
+  ansible.builtin.include_tasks: "{{ ocp_hcp_kubevirt_cluster_action }}.yml"
+  loop: "{{ ocp_hcp_kubevirt_cluster__definitions.clusters }}"
+  loop_control:
+    loop_var: ocp_hcp_kubevirt_cluster__def
+    label: "{{ ocp_hcp_kubevirt_cluster__def.name }}"
+  when: not ocp_hcp_kubevirt_cluster_render_only | bool
+
+- name: Shift on Shift | Publish non-secret results for workflows
+  ansible.builtin.set_stats:
+    data:
+      shift_on_shift_results: "{{ ocp_hcp_kubevirt_cluster_results }}"
+    per_host: false
+  when: ocp_hcp_kubevirt_cluster_results | length > 0
+
+- name: Shift on Shift | Write results file
+  ansible.builtin.copy:
+    content: "{{ ocp_hcp_kubevirt_cluster_results | to_nice_json }}"
+    dest: "{{ ocp_hcp_kubevirt_cluster_result_path }}"
+    mode: "0600"
+  when:
+    - ocp_hcp_kubevirt_cluster_result_path | length > 0
+    - ocp_hcp_kubevirt_cluster_results | length > 0

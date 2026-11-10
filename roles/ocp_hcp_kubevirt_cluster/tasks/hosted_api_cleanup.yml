@@ -1,0 +1,17 @@
+---
+# Drops the hosted kubeconfig and connection values from memory and removes
+# the temporary CA file written by hosted_api_auth.yml.
+- name: Shift on Shift | Remove temporary hosted API CA file
+  ansible.builtin.file:
+    path: "{{ ocp_hcp_kubevirt_cluster__hosted_ca_tmp.path }}"
+    state: absent
+  changed_when: false
+  when: ocp_hcp_kubevirt_cluster__hosted_ca_tmp.path | default('') | length > 0
+
+- name: Shift on Shift | Drop hosted kubeconfig from memory
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_cluster__hosted_kubeconfig: {}
+    ocp_hcp_kubevirt_cluster__hosted_auth: {}
+    ocp_hcp_kubevirt_cluster__hosted_ca_tmp: {}
+    ocp_hcp_kubevirt_cluster__hosted_ca_file: ""
+  no_log: true

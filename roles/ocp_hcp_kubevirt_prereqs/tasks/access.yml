@@ -1,0 +1,54 @@
+---
+# yamllint disable rule:line-length
+# SelfSubjectAccessReviews are evaluated and returned by the API server; they
+# are not stored, so they run in check mode too.
+- name: Shift on Shift prereqs | Read target namespaces
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Namespace
+    name: "{{ item }}"
+  loop: "{{ ocp_hcp_kubevirt_prereqs__definitions.clusters | map(attribute='namespace') | unique | list }}"
+  register: ocp_hcp_kubevirt_prereqs__namespaces
+
+- name: Shift on Shift prereqs | Build permission checks
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_prereqs__reviews: >-
+      {{
+        ocp_hcp_kubevirt_prereqs__definitions.clusters
+        | infra.automation_development_office.hcp_kubevirt_access_reviews(
+            ocp_hcp_kubevirt_prereqs__namespaces.results
+            | map(attribute='resources') | flatten
+            | map(attribute='metadata.name') | list,
+            ocp_hcp_kubevirt_prereqs_wildcard_remediation_planned | bool,
+            ocp_hcp_kubevirt_prereqs_install_planned
+          )
+      }}
+
+- name: Shift on Shift prereqs | Review permissions
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: authorization.k8s.io/v1
+      kind: SelfSubjectAccessReview
+      metadata: {}
+      spec:
+        resourceAttributes: "{{ item.attributes }}"
+  loop: "{{ ocp_hcp_kubevirt_prereqs__reviews }}"
+  loop_control:
+    label: "{{ item.key }}"
+  register: ocp_hcp_kubevirt_prereqs__ssar
+  changed_when: false
+  check_mode: false
+
+- name: Shift on Shift prereqs | Record permission results
+  ansible.builtin.set_fact:
+    ocp_hcp_kubevirt_prereqs__access: >-
+      {{
+        dict(
+          ocp_hcp_kubevirt_prereqs__ssar.results | map(attribute='item.key')
+          | zip(
+              ocp_hcp_kubevirt_prereqs__ssar.results
+              | map(attribute='result.status.allowed', default=false)
+            )
+        )
+      }}

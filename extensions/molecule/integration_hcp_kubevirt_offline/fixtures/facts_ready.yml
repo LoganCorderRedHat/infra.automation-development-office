@@ -1,0 +1,48 @@
+---
+# yamllint disable rule:line-length
+# Management cluster that meets every required prerequisite (OCP 4.22, MCE 2.17).
+crds: {hostedclusters: true, nodepools: true, mce: true, hco: true, kubevirt: true, cdi: true, storageprofiles: true,
+       managedclusters: true, managedclusteraddons: true, metallb: true, ipaddresspools: true, l2advertisements: true,
+       bgpadvertisements: true, idms: true, icsp: true, volumesnapshotclasses: true, consoleclidownloads: true}
+clusterversion: {version: 4.22.1, available: true, progressing: false, failing: false}
+clusteroperators:
+  - {name: kube-apiserver, available: true, degraded: false}
+  - {name: ingress, available: true, degraded: false}
+infrastructure: {platform: BareMetal, control_plane_topology: HighlyAvailable}
+network: {type: OVNKubernetes, mtu: 9000}
+nodes:
+  - {name: w1, worker: true, control_plane: false, ready: true, schedulable: true, cpu_allocatable_m: 64000, memory_allocatable_b: 274877906944, pods_allocatable: 500, zone: a}
+  - {name: w2, worker: true, control_plane: false, ready: true, schedulable: true, cpu_allocatable_m: 64000, memory_allocatable_b: 274877906944, pods_allocatable: 500, zone: b}
+  - {name: w3, worker: true, control_plane: false, ready: true, schedulable: true, cpu_allocatable_m: 64000, memory_allocatable_b: 274877906944, pods_allocatable: 500, zone: c}
+pod_requests:
+  w1: {cpu_m: 8000, memory_b: 34359738368, pods: 80}
+mce: {present: true, name: multiclusterengine, version: 2.17.0, phase: Available, hypershift_enabled: null, hypershift_local_hosting_enabled: null}
+hypershift_operator: {present: true, available: true}
+supported_versions: ["4.22", "4.21", "4.20"]
+local_cluster: {present: true}
+managed_clusters: [local-cluster]
+hypershift_addon: {checked: true, available: true}
+existing_hostedclusters: []
+cnv: {present: true, version: 4.22.0, available: true, degraded: false}
+storage_classes:
+  - {name: molecule-rwx-block, provisioner: rbd.csi.example.test, default: true}
+  - {name: molecule-lvms, provisioner: topolvm.io, default: false}
+storage_profiles:
+  molecule-rwx-block:
+    - {access_modes: [ReadWriteMany], volume_mode: Block}
+volume_snapshot_classes:
+  - {name: molecule-snap, default: true}
+ingress: {wildcard_policy: WildcardsAllowed, default_domain: apps.mgmt.example.test}
+metallb: {instance_present: true, pools: 1, advertisements: 1}
+mirror_sources:
+  - quay.io/openshift-release-dev/ocp-release
+  - quay.io/openshift-release-dev/ocp-v4.0-art-dev
+image_additional_trusted_ca: true
+fips_enabled: false
+hcp_cli_download: true
+pull_secrets:
+  tenant-a: {valid: true, registries: [quay.io, registry.redhat.io], error: ""}
+  tenant-b: {valid: true, registries: ["mirror.example.test:5000"], error: ""}
+access:
+  "create hostedclusters.hypershift.openshift.io in clusters": true
+  "create nodepools.hypershift.openshift.io in clusters": true

@@ -1,0 +1,43 @@
+---
+# Live cluster scenario. Excluded from PR CI by the ocp_* pattern in
+# pr_exclude.txt; run it by hand or with workflow_dispatch against a
+# compatible management cluster (see README.md).
+dependency:
+  name: shell
+  command: echo skip galaxy dependency install
+
+driver:
+  name: default
+
+platforms:
+  - name: localhost
+
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_COLLECTIONS_PATH: "${HOME}/.ansible/collections"
+    K8S_AUTH_HOST: "${K8S_AUTH_HOST}"
+    K8S_AUTH_API_KEY: "${K8S_AUTH_API_KEY}"
+    K8S_AUTH_VERIFY_SSL: "${K8S_AUTH_VERIFY_SSL}"
+  inventory:
+    hosts:
+      all:
+        hosts:
+          localhost:
+            ansible_connection: local
+  playbooks:
+    converge: converge.yml
+    verify: verify.yml
+    destroy: destroy.yml
+
+verifier:
+  name: ansible
+
+scenario:
+  test_sequence:
+    - dependency
+    - syntax
+    - converge
+    - idempotence
+    - verify
+    - destroy
